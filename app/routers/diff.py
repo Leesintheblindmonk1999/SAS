@@ -2,7 +2,7 @@
 app/routers/diff.py — Omni-Scanner API v1.0
 Two-document semantic diff endpoint — the primary forensic endpoint.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.models.request import DiffRequest
 from app.models.response import DiffResponse, EvidenceBlock
 from app.services.detector import run_diff
@@ -14,12 +14,13 @@ router = APIRouter()
 def _to_diff_response(raw: dict) -> DiffResponse:
     ev = raw.get("evidence", {})
     return DiffResponse(
-        isi=raw.get("isi", 0.0),
+        manifold_score=raw.get("manifold_score", raw.get("isi", 0.0)),
+        isi=raw.get("isi", raw.get("manifold_score", 0.0)),
         verdict=raw.get("verdict", "ERROR"),
-        manipulation_alert=raw.get("manipulation_alert", False),
+        manipulation_alert=raw.get("manipulation_alert", {"triggered": False, "sources": [], "details": {}}),
         confidence=raw.get("confidence", 0.0),
-        evidence=EvidenceBlock(**ev),
-        latency_ms=raw.get("latency_ms"),
+        evidence=EvidenceBlock(**ev) if isinstance(ev, dict) else EvidenceBlock(),
+        latency_ms=raw.get("latency_ms", 0.0),
     )
 
 
@@ -29,19 +30,19 @@ async def diff_endpoint(
     api_key: str = Depends(get_api_key),
 ):
     """
-    Compare two documents using the TDA+NIG+v10.1 pipeline.
-
-    text_a = reference (ground truth)
-    text_b = suspect (potentially hallucinated)
-
-    Returns ISI, verdict, and evidence block with fired modules.
-    This is the primary forensic endpoint — use when you have a reference document.
+    Compare two texts and detect structural hallucinations.
     """
-    raw = run_diff(
+    result = run_diff(
         text_a=request.text_a,
         text_b=request.text_b,
         experimental=request.experimental,
-        domain=request.domain,
-        enable_modules=request.enable_modules,
+        domain=request.domain
     )
-    return _to_diff_response(raw)
+    
+    if result.get("verdict") == "ERROR":
+        raise HTTPException(
+            status_code=400, 
+            detail=result.get("evidence", {}).get("error", "Unknown error")
+        )
+    
+    return _to_diff_response(result)
