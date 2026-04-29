@@ -942,14 +942,23 @@ class SemanticDiff:
         new_faults = max(0, delta.delta_structural_faults)
         confidence = min(1.0, min(rep_a.point_cloud_size, rep_b.point_cloud_size) / 50) * 0.6 + \
                      min(1.0, min(rep_a.sentence_count, rep_b.sentence_count) / 20) * 0.4
-        if isi < kappa or wass > kappa or (new_faults >= 2 and bott > kappa * 0.5):
-           return "MANIFOLD_RUPTURE", "CRITICAL", round(confidence, 4)
-        if wass < 1e-4 and bott < 1e-4:
-           return "IDENTICAL", "LOW", round(confidence, 4)
-        if wass > kappa * 0.1 or bott > kappa * 0.2 or new_faults >= 1:
-           return "STRUCTURAL_CHANGE", "HIGH", round(confidence, 4)
+        
+        # 🔧 FIX: Verdadera detección de alucinaciones - prioridad alta
+        if isi < kappa:
+            return "MANIFOLD_RUPTURE", "CRITICAL", round(confidence, 4)
+        
+        # Si no hay ruptura, comprobar si los textos son prácticamente idénticos
+        if wass < 0.15 and bott < 0.15 and isi > 0.95:
+            return "IDENTICAL", "LOW", round(confidence, 4)
+      
+        if wass > kappa * 0.8 or bott > kappa * 0.8:
+            return "MANIFOLD_RUPTURE", "CRITICAL", round(confidence, 4)
+            
+        if wass > kappa * 0.4 or bott > kappa * 0.4 or new_faults >= 1:
+            return "STRUCTURAL_CHANGE", "HIGH", round(confidence, 4)
+            
         return "MINOR_DRIFT", "MEDIUM", round(confidence, 4)
-       
+
     def _build_summary(
         self, label_a, label_b, wass, bott, wass_h0,
         isi_tda, nig_isi, isi_hard, isi_final,
