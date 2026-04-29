@@ -41,6 +41,7 @@ class EvidenceBlock(BaseModel):
     ledger_hash:     str = "5a434d7234fd55cb45829d539eee34a5ea05a3c594e26d76bb41695c46b2a996"
     zenodo_doi:      str = "10.5281/zenodo.19543972"
     error:           str | None = None
+    note:            str | None = Field(None, description="Additional note (e.g., identical texts)")
 
 
 class ManipulationAlertDetails(BaseModel):
@@ -56,14 +57,16 @@ class ManipulationAlert(BaseModel):
 
     @classmethod
     def from_dict(cls, d: dict) -> "ManipulationAlert":
+        if not d:
+            return cls(triggered=False, sources=[], details=ManipulationAlertDetails())
         det = d.get("details", {})
         return cls(
             triggered=d.get("triggered", False),
             sources=d.get("sources", []),
             details=ManipulationAlertDetails(
-                negation_probe=det.get("negation_probe",      {"triggered": False, "not_run": True}),
+                negation_probe=det.get("negation_probe", {"triggered": False, "not_run": True}),
                 arithmetic_detector=det.get("arithmetic_detector", {"triggered": False, "not_run": True}),
-                reference_check=det.get("reference_check",   {"triggered": False, "not_run": True}),
+                reference_check=det.get("reference_check", {"triggered": False, "not_run": True}),
             ),
         )
 
@@ -77,9 +80,10 @@ class AuditResponse(BaseModel):
     latency_ms:         float | None = None
 
 
+# 🔧 FIX: DiffResponse AHORA INCLUYE manifold_score
 class DiffResponse(BaseModel):
-    manifold_score:     float  
-    isi:                float  
+    manifold_score:     float  # ← CLAVE: añadido para que coincida con run_diff
+    isi:                float
     verdict:            str
     manipulation_alert: ManipulationAlert
     confidence:         float
@@ -137,6 +141,7 @@ class ConversationAuditResponse(BaseModel):
     blockchain_anchor:    str   = "OpenTimestamps SHA-256"
     zenodo_doi:           str   = "10.5281/zenodo.19543972"
     certificado_sha256:   str   = Field(..., description="SHA-256 of the full audit output")
+
 
 class ExternalAuditResponse(BaseModel):
     model: str
