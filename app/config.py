@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     # ========================================================================
     # API Security
     # ========================================================================
-    admin_secret: str = "sas_admin_dev_2026_durante"
+    # 🔒 CAMBIADO: ya no hay valor por defecto. Debe venir de .env o variable de entorno
+    admin_secret: str = ""
 
     # ========================================================================
     # Core Detection
@@ -40,7 +41,8 @@ class Settings(BaseSettings):
     # ========================================================================
     # Extended Modules E9-E12
     # ========================================================================
-    modules_enabled: str = "E9,E11,E12"
+    # 🔧 CORREGIDO: activa E9, E10, E11, E12 (todos los módulos térmicos)
+    modules_enabled: str = "E9,E10,E11,E12"
     sas_fact_kb_path: str = ""
     sas_fact_kb_flag_unknown: bool = False
     sas_topic_shift_use_st: bool = False
@@ -77,7 +79,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent / ".env"),
         env_file_encoding="utf-8",
-        extra="ignore",  # <- clave: ignora variables del .env no definidas aquí
+        extra="ignore",
     )
 
     # ========================================================================
@@ -99,7 +101,6 @@ class Settings(BaseSettings):
     def ollama_api_url(self) -> str:
         """Compatibilidad: usa ollama_host + endpoint fijo"""
         if self.ollama_host:
-            # Si no tiene /api/chat al final, lo agregamos
             base = self.ollama_host.rstrip('/')
             if not base.endswith('/api/chat'):
                 base = f"{base}/api/chat"
