@@ -1,0 +1,63 @@
+# ════════════════════════════════════════════════════════════════════════════
+# docker-compose.yml — Omni-Scanner API + SAS v1.1.0
+# Location: omni-scanner-api/docker-compose.yml
+#
+# Usage (from omni-scanner-api/):
+#   docker-compose up --build        # primera vez
+#   docker-compose up                # siguientes veces
+#   docker-compose down              # detener
+#   docker-compose logs -f api       # ver logs
+#
+# Author: Gonzalo Emir Durante — TAD EX-2026-18792778
+# ════════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+services:
+
+  # ── Omni-Scanner API ────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .                               # omni-scanner-api/ (current dir)
+      dockerfile: docker/Dockerfile
+    image: omni-scanner-api:1.1.0
+    container_name: omni-scanner-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    volumes:
+      # SQLite databases persisted in data/ folder
+      - ./data/auth.db:/app/app/auth.db
+      - ./data/rate_limit.db:/app/app/rate_limit.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    # depends_on:
+    #   ollama:
+    #     condition: service_healthy
+
+  # ── Ollama — descomenta para habilitar /v1/chat ───────────────────────────
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
+  #   restart: unless-stopped
+
+# volumes:
+#   ollama_data:
