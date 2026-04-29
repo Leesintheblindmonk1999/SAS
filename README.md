@@ -1,11 +1,13 @@
 # SAS - Symbiotic Autoprotection System
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19689077.svg)](https://doi.org/10.5281/zenodo.19689077)
-![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![API](https://img.shields.io/badge/API-FastAPI-009688)
-![Status](https://img.shields.io/badge/status-research%20alpha-orange)
-![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)
+[![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
+[![API](https://img.shields.io/badge/API-FastAPI-009688)](#api-examples)
+[![Status](https://img.shields.io/badge/status-research%20alpha-orange)](#scope-and-limitations)
+[![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](docs/benchmark_results.json)
+[![Security](https://img.shields.io/badge/security-policy-lightgrey)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
 
 **SAS - Symbiotic Autoprotection System** is an open-source API framework for detecting structural hallucinations in generative AI outputs.
 
