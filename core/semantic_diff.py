@@ -326,6 +326,44 @@ def lexical_overlap(text_a: str, text_b: str) -> float:
     return len(tokens_a & tokens_b) / len(union) if union else 0.0
 
 
+
+
+def _is_zero_diagram(dgm: np.ndarray) -> bool:
+    """Return True when a persistence diagram is the degenerate [[0, 0]] fallback."""
+    return (
+        isinstance(dgm, np.ndarray)
+        and dgm.shape == (1, 2)
+        and float(dgm[0, 0]) == 0.0
+        and float(dgm[0, 1]) == 0.0
+    )
+
+
+def _count_valid_sentences(text: str) -> int:
+    """Count sentence-like units using the same splitter logic as _get_raw_diagrams()."""
+    normalized = re.sub(r'\n(?![\n])', ' ', text.strip())
+    normalized = re.sub(r'\s+', ' ', normalized)
+    return len([
+        s.strip()
+        for s in re.split(r'(?<=[.!?])\s+', normalized)
+        if len(s.strip()) > 15
+    ])
+
+
+def _short_text_fallback_isi(text_a: str, text_b: str, lex_overlap: float) -> float:
+    """
+    Conservative fallback for short or topology-degenerate comparisons.
+
+    This prevents degenerate persistence diagrams from being interpreted as
+    IDENTICAL when the input texts are clearly different. It does not replace
+    TDA when enough sentence-level topology exists.
+    """
+    if text_a.strip() == text_b.strip():
+        return 1.0
+
+    # For short texts, lexical overlap is safer than empty topology.
+    # Clamp to [0, 1].
+    return round(max(0.0, min(1.0, lex_overlap)), 6)
+
 def get_adaptive_kappa(text_a, text_b, base_kappa=0.56, domain=None):
     detected = domain if domain else detect_domain(text_a + " " + text_b)
     adaptive_kappa = DOMAIN_KAPPA.get(detected, base_kappa)
@@ -612,6 +650,34 @@ class SemanticDiff:
         combined_dist = w_h1 * wass_h1 + w_h0 * wass_h0
         isi_tda = max(0.0, min(1.0, 1.0 - combined_dist / max_ref))
         isi_tda = round(isi_tda, 6)
+
+        # ── Short-text / degenerate-topology guard ─────────────────────────
+        # When both texts have fewer than 3 valid sentence-like units,
+        # _get_raw_diagrams() returns [[0, 0]] for both H0 and H1. Without
+        # this guard, zero topological distance can be misread as IDENTICAL.
+        sent_count_a = _count_valid_sentences(text_a)
+        sent_count_b = _count_valid_sentences(text_b)
+
+        degenerate_topology = (
+            sent_count_a < 3
+            or sent_count_b < 3
+            or (
+                _is_zero_diagram(dgm_h0_a)
+                and _is_zero_diagram(dgm_h1_a)
+                and _is_zero_diagram(dgm_h0_b)
+                and _is_zero_diagram(dgm_h1_b)
+            )
+        )
+
+        if degenerate_topology and text_a.strip() != text_b.strip():
+            fallback_isi = _short_text_fallback_isi(text_a, text_b, lex_overlap)
+            isi_tda = min(isi_tda, fallback_isi)
+
+            # Prevent _assign_verdict() from interpreting degenerate
+            # zero-distance topology as literal identity.
+            if isi_tda < effective_kappa:
+                wass_h1 = max(wass_h1, effective_kappa)
+                bott_h1 = max(bott_h1, effective_kappa * 0.5)
 
         # ── Layer 3: NIG (Core) ─────────────────────────────────────────────
         nig_isi = 1.0
