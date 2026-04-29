@@ -63,7 +63,6 @@ def _with_timeout(fn, *args, seconds: int = SCAN_TIMEOUT_SECONDS, **kwargs):
         raise
 
 
-# 🔧 FIX: Función para detectar textos idénticos
 def _are_identical(text_a: str, text_b: str) -> bool:
     """Check if two texts are identical, ignoring whitespace and common separators."""
     if not text_a or not text_b:
@@ -263,6 +262,7 @@ def run_diff(text_a: str, text_b: str, experimental: bool = False, domain: str =
     # 🔧 FIX: Si los textos son idénticos, retornar ISI = 1.0 inmediatamente
     if _are_identical(text_a, text_b):
         return {
+            "manifold_score": 1.0,
             "isi": 1.0,
             "verdict": "PERFECT_EQUILIBRIUM",
             "manipulation_alert": {"triggered": False, "sources": [], "details": {}},
@@ -293,6 +293,7 @@ def run_diff(text_a: str, text_b: str, experimental: bool = False, domain: str =
         )
         module_state = _apply_module_penalty(report, text_b, experimental, enable_modules)
         result = {
+            "manifold_score": module_state["isi_final"],
             "isi": module_state["isi_final"],
             "verdict": module_state["verdict"],
             "manipulation_alert": build_manipulation_alert_from_report(report),
