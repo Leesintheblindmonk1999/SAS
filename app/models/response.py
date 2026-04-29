@@ -78,7 +78,8 @@ class AuditResponse(BaseModel):
 
 
 class DiffResponse(BaseModel):
-    isi:                float
+    manifold_score:     float  
+    isi:                float  
     verdict:            str
     manipulation_alert: ManipulationAlert
     confidence:         float
