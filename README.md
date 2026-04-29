@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](#api-examples)
 [![Status](https://img.shields.io/badge/status-research%20alpha-orange)](#scope-and-limitations)
-[![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](docs/benchmark_results.json)
+[![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](docs/benchmark_fixed_20260429_150823.json)
 [![Security](https://img.shields.io/badge/security-policy-lightgrey)](SECURITY.md)
 [![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
 
