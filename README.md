@@ -154,7 +154,7 @@ SAS/
 
 ```text
 SAS/
-├── src/sas/detector.py       # Motor core: TDA + NIG + módulos E9-E12
+├── src/api/main.py       # Motor core: TDA + NIG + módulos E9-E12
 ├── src/api/main.py           # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
 ├── tests/benchmark_runner.py # Script de benchmark
 ├── docker-compose.yml
@@ -821,7 +821,7 @@ SAS/
 
 ```text
 SAS/
-├── src/sas/detector.py       # Core engine: TDA + NIG + E9-E12 modules
+├── src/api/main.py       # Core engine: TDA + NIG + E9-E12 modules
 ├── src/api/main.py           # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
 ├── tests/benchmark_runner.py # Benchmark execution script
 ├── docker-compose.yml
