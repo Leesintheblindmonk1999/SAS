@@ -153,9 +153,11 @@ SAS/
 ## Arquitectura
 
 ```text
+
 SAS/
-├── src/api/main.py       # Motor core: TDA + NIG + módulos E9-E12
-├── src/api/main.py           # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
+├── app/                   # Código principal de la API
+│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
+│   └── services/          # Motor core: TDA + NIG + módulos E9-E12
 ├── tests/benchmark_runner.py # Script de benchmark
 ├── docker-compose.yml
 ├── Dockerfile
@@ -821,8 +823,9 @@ SAS/
 
 ```text
 SAS/
-├── src/api/main.py       # Core engine: TDA + NIG + E9-E12 modules
-├── src/api/main.py           # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
+├── app/                   # Main API code
+│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
+│   └── services/          # Core engine: TDA + NIG + E9-E12 modules
 ├── tests/benchmark_runner.py # Benchmark execution script
 ├── docker-compose.yml
 ├── Dockerfile
