@@ -102,10 +102,9 @@ def get_status() -> dict:
     resonance_state = list_sessions()
     chat_sessions   = list_chat_sessions()
 
-    # Overall health
-    ollama_ok   = ollama_status.get("reachable", False)
+    # 🔧 FIX: El estado general depende del núcleo de detección (TDA), no de Ollama
     core_ok     = module_status.get("tda_attestation") == "ok"
-    system_ok   = ollama_ok and core_ok
+    system_ok   = core_ok  # Ollama es opcional para el núcleo
 
     return {
         "status":       "ok" if system_ok else "degraded",
@@ -132,3 +131,12 @@ def get_status() -> dict:
             "history_cap":          40,
         },
     }
+
+
+@router.get("/ping", tags=["SAS Status"])
+async def ping():
+    """
+    Ultra-light health check for load balancers and uptime monitoring.
+    Returns minimal response with κD constant.
+    """
+    return {"pong": True, "kappa_d": KAPPA_D}
