@@ -332,7 +332,7 @@ pip install -r requirements.txt
 Ejecutar API:
 
 ```bash
-uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -617,7 +617,7 @@ python tests/benchmark_runner.py
 Ejecutar API local:
 
 ```bash
-uvicorn src.api.main:app --reload
+uvicorn app.main:app --reload
 ```
 
 ---
@@ -1000,7 +1000,7 @@ pip install -r requirements.txt
 Run the API:
 
 ```bash
-uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -1285,7 +1285,7 @@ python tests/benchmark_runner.py
 Run API locally:
 
 ```bash
-uvicorn src.api.main:app --reload
+uvicorn app.main:app --reload
 ```
 
 ---
