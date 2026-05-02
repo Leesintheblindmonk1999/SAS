@@ -1,8 +1,14 @@
 """
-app/config.py — Omni-Scanner API v1.0 + SAS
-Autor: Gonzalo Emir Durante — TAD EX-2026-18792778
+app/config.py - SAS - Symbiotic Autoprotection System v1.1.0
+Autor: Gonzalo Emir Durante - TAD EX-2026-18792778
+
+Centralized configuration for the FastAPI service.
 """
+
+from __future__ import annotations
+
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,8 +16,11 @@ class Settings(BaseSettings):
     # ========================================================================
     # API Security
     # ========================================================================
-    # 🔒 CAMBIADO: ya no hay valor por defecto. Debe venir de .env o variable de entorno
+    # No production default. Set this in Render or .env.
     admin_secret: str = ""
+
+    # Enable only temporarily when debugging deployment headers.
+    enable_debug_endpoints: bool = False
 
     # ========================================================================
     # Core Detection
@@ -21,10 +30,13 @@ class Settings(BaseSettings):
     min_text_length: int = 30
 
     # ========================================================================
-    # Database paths (relative to app/ folder)
+    # Database paths
     # ========================================================================
     auth_db_path: str = "data/auth.db"
     rate_limit_db_path: str = "data/rate_limit.db"
+
+    # Legacy compatibility. Keep if older services still read DATABASE_URL.
+    database_url: str = "sqlite:///./omni_scanner.db"
 
     # ========================================================================
     # Rate Limiting
@@ -32,16 +44,19 @@ class Settings(BaseSettings):
     free_requests_per_day: int = 100
 
     # ========================================================================
-    # Ollama (local LLM for /v1/chat)
+    # Ollama / local LLM backend for /v1/chat
     # ========================================================================
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:14b-instruct-q4_K_M"
     ollama_timeout: int = 60
 
+    # Legacy compatibility fields.
+    ollama_url: str = ""
+    ollama_models_url: str = "http://localhost:11434/api/tags"
+
     # ========================================================================
     # Extended Modules E9-E12
     # ========================================================================
-    # 🔧 CORREGIDO: activa E9, E10, E11, E12 (todos los módulos térmicos)
     modules_enabled: str = "E9,E10,E11,E12"
     sas_fact_kb_path: str = ""
     sas_fact_kb_flag_unknown: bool = False
@@ -51,6 +66,8 @@ class Settings(BaseSettings):
     # ========================================================================
     # CORS
     # ========================================================================
+    # For production, set this to your frontend domains, e.g.:
+    # CORS_ALLOW_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
     cors_allow_origins: str = "*"
 
     # ========================================================================
@@ -59,19 +76,32 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # ========================================================================
-    # SAS Identity
+    # SAS Identity / Metadata
     # ========================================================================
-    sas_version: str = "1.1.0-beta"
+    sas_name: str = "SAS - Symbiotic Autoprotection System"
+    sas_version: str = "1.1.0"
+    omni_version: str = "10.1"
+
     registry: str = "TAD EX-2026-18792778"
-    zenodo_doi: str = "10.5281/zenodo.19543972"
+    sas_doi: str = "10.5281/zenodo.19702379"
+    omni_scanner_doi: str = "10.5281/zenodo.19543972"
+
+    # Legacy name kept so older code that reads settings.zenodo_doi still works.
+    zenodo_doi: str = "10.5281/zenodo.19702379"
+
+    repo_url: str = "https://github.com/Leesintheblindmonk1999/SAS"
+    hosted_api: str = "https://sas-api.onrender.com"
+
+    ledger_hash: str = (
+        "5a434d7234fd55cb45829d539eee34a5ea05a3c594e26d76bb41695c46b2a996"
+    )
+    ots_date: str = "2026-04-11"
+    ots_chain: str = "Bitcoin (OpenTimestamps)"
 
     # ========================================================================
-    # Legacy / compatibility fields (no romper si están en .env)
+    # Optional Routers
     # ========================================================================
     enable_external_audit: bool = False
-    ollama_url: str = ""  # se usa solo si ollama_host no está definido
-    ollama_models_url: str = "http://localhost:11434/api/tags"
-    database_url: str = "sqlite:///./omni_scanner.db"  # legacy
 
     # ========================================================================
     # Pydantic configuration
@@ -80,32 +110,71 @@ class Settings(BaseSettings):
         env_file=str(Path(__file__).parent.parent / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        case_sensitive=False,
     )
 
     # ========================================================================
-    # Properties (helpers)
+    # Properties / helpers
     # ========================================================================
+
     @property
     def enabled_modules(self) -> list[str]:
+        """Return enabled thermic modules as normalized uppercase codes."""
         if not self.modules_enabled.strip():
             return []
-        return [m.strip().upper() for m in self.modules_enabled.split(",") if m.strip()]
+        return [
+            module.strip().upper()
+            for module in self.modules_enabled.split(",")
+            if module.strip()
+        ]
 
     @property
     def cors_origins(self) -> list[str]:
-        if self.cors_allow_origins.strip() == "*":
+        """Parse CORS_ALLOW_ORIGINS into a FastAPI-compatible list."""
+        value = self.cors_allow_origins.strip()
+
+        if value == "*":
             return ["*"]
-        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+        return [
+            origin.strip()
+            for origin in value.split(",")
+            if origin.strip()
+        ]
 
     @property
     def ollama_api_url(self) -> str:
-        """Compatibilidad: usa ollama_host + endpoint fijo"""
+        """
+        Resolve the Ollama chat endpoint.
+
+        Priority:
+        1. ollama_host + /api/chat
+        2. legacy ollama_url
+        3. localhost default
+        """
         if self.ollama_host:
-            base = self.ollama_host.rstrip('/')
-            if not base.endswith('/api/chat'):
-                base = f"{base}/api/chat"
-            return base
+            base = self.ollama_host.rstrip("/")
+            if base.endswith("/api/chat"):
+                return base
+            return f"{base}/api/chat"
+
         return self.ollama_url or "http://localhost:11434/api/chat"
+
+    @property
+    def ollama_tags_url(self) -> str:
+        """Resolve the Ollama tags/models endpoint."""
+        if self.ollama_host:
+            base = self.ollama_host.rstrip("/")
+            if base.endswith("/api/tags"):
+                return base
+            return f"{base}/api/tags"
+
+        return self.ollama_models_url or "http://localhost:11434/api/tags"
+
+    @property
+    def has_admin_secret(self) -> bool:
+        """Return True when an admin secret is configured."""
+        return bool(self.admin_secret.strip())
 
 
 settings = Settings()
