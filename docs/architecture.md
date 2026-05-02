@@ -197,9 +197,9 @@ The rate limit is calculated using request counts per API key per day.
 
 | Option | Command |
 |--------|---------|
-| Local development | `uvicorn src.api.main:app --reload` |
+| Local development | `uvicorn app.main:app --reload` |
 | Docker | `docker compose up --build` |
-| Production | `gunicorn -w 4 -k uvicorn.workers.UvicornWorker src.api.main:app` |
+| Production | `gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app` |
 
 ---
 
