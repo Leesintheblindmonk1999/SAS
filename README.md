@@ -15,7 +15,7 @@
 
 - [Español](#es)
 - [English](#en)
-
+  
 ---
 
 <a id="es"></a>
@@ -72,6 +72,13 @@ El autoalojamiento sigue siendo completamente posible bajo los términos de la l
 
 ---
 
+## 🌐 Manifesto Público / Estándar SAS
+
+**Landing page oficial:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
+
+Benchmark, declaración de neutralidad geopolítica, registro TAD, DOI y anclaje OpenTimestamps.
+
+---
 <a id="es-problema"></a>
 
 ## Problema que resuelve
@@ -738,6 +745,14 @@ Self-hosting remains fully supported under the project license.
 | [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md) | GitHub issue template for bugs |
 | [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md) | GitHub issue template for enhancement proposals |
 | [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
+
+---
+
+## 🌐 Public Manifesto / SAS Standard
+
+**Official Landing Page:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
+
+Benchmark, Declaration of Geopolitical Neutrality, TAD Registration, DOI, and OpenTimestamps Anchoring.
 
 ---
 
