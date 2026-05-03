@@ -1,6 +1,7 @@
 # SAS - Symbiotic Autoprotection System
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19689077.svg)](https://doi.org/10.5281/zenodo.19689077)
+[![Landing Page](https://img.shields.io/badge/🌐-Landing_Page-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
 [![API Online](https://img.shields.io/badge/API-online-brightgreen)](https://sas-api.onrender.com)
 [![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
@@ -11,6 +12,8 @@
 [![Security](https://img.shields.io/badge/security-policy-lightgrey)](SECURITY.md)
 [![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
 [![Smoke Test](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml/badge.svg)](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml)
+
+
 ## Language / Idioma
 
 - [Español](#es)
