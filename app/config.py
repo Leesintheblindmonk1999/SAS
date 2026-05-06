@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     auth_db_path: str = "data/auth.db"
     rate_limit_db_path: str = "data/rate_limit.db"
 
+    # Metrics database
+    metrics_db_path: str = "data/metrics.db"
+    metrics_retention_days: int = 90
+
     # Legacy compatibility. Keep if older services still read DATABASE_URL.
     database_url: str = "sqlite:///./omni_scanner.db"
 
