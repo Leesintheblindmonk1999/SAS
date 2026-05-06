@@ -31,6 +31,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.services.metrics_store import (
+    init_metrics_db,
+    purge_old_metrics,
+    record_request_metric,
+)
 
 # ==============================================================================
 # CENTRALIZED METADATA
@@ -111,6 +116,15 @@ except ImportError:
     HAS_STATUS = False
     status_router = None
     logger.warning("Status router not found")
+
+try:
+    from app.routers.metrics import router as metrics_router
+
+    HAS_METRICS = True
+except ImportError:
+    HAS_METRICS = False
+    metrics_router = None
+    logger.info("Metrics router not found. Optional admin metrics disabled.")
 
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
@@ -227,6 +241,25 @@ async def request_monitoring_middleware(request: Request, call_next):
         process_time,
     )
 
+    try:
+        api_key = request.headers.get("X-API-Key")
+        record_request_metric(
+            method=method,
+            path=path,
+            status_code=response.status_code,
+            ip_hash=ip_hash,
+            api_key=api_key,
+            latency_ms=process_time * 1000,
+            request_id=request_id,
+            country=country,
+        )
+    except Exception as metrics_error:
+        logger.warning(
+            "metrics_record_failed request_id=%s error=%s",
+            request_id,
+            str(metrics_error),
+        )
+
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time"] = str(round(process_time, 4))
     response.headers["X-Trace-Timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -257,6 +290,15 @@ app = FastAPI(
     },
 )
 
+
+@app.on_event("startup")
+async def startup_metrics():
+    init_metrics_db()
+    deleted = purge_old_metrics()
+    if deleted:
+        logger.info("metrics_retention deleted_rows=%s", deleted)
+
+
 app.middleware("http")(request_monitoring_middleware)
 
 if HAS_SECURITY and SecurityHeadersMiddleware:
@@ -277,6 +319,9 @@ app.include_router(health.router, tags=["System"])
 app.include_router(audit.router, prefix="/v1", tags=["Detection"])
 app.include_router(diff.router, prefix="/v1", tags=["Forensic Diff"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+
+if HAS_METRICS and metrics_router:
+    app.include_router(metrics_router, prefix="/v1", tags=["Admin"])
 
 if HAS_CHAT and chat_router:
     app.include_router(chat_router, tags=["Honest Chat"])
@@ -367,6 +412,7 @@ async def readyz() -> dict[str, Any]:
             "audit": True,
             "diff": True,
             "admin": True,
+            "metrics": HAS_METRICS,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
