@@ -78,7 +78,23 @@ class Settings(BaseSettings):
     # Logging
     # ========================================================================
     log_level: str = "INFO"
+        # ========================================================================
+    # Public activity / landing page
+    # ========================================================================
+    public_anomaly_threshold: int = 5000
 
+    # ========================================================================
+    # Email alerts
+    # ========================================================================
+    email_alerts_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
+    alert_email_to: str = "duranteg2@gmail.com"
+    
     # ========================================================================
     # SAS Identity / Metadata
     # ========================================================================
