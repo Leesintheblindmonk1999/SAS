@@ -8,6 +8,7 @@ Design:
 - No raw IP storage.
 - No raw API key storage.
 - Aggregated endpoint metrics for 24h / 7d / 30d.
+- Public activity endpoints expose only anonymized aggregates.
 """
 
 from __future__ import annotations
@@ -23,6 +24,14 @@ from app.config import settings
 
 
 _DB_LOCK = threading.Lock()
+
+NOISE_PATHS = (
+    "/health",
+    "/readyz",
+    "/v1/metrics",
+    "/favicon.ico",
+    "/robots.txt",
+)
 
 
 def _utc_now() -> datetime:
@@ -83,12 +92,24 @@ def init_metrics_db() -> None:
                 """
             )
 
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_ts ON api_request_metrics(ts_utc)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_path_ts ON api_request_metrics(path, ts_utc)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_status_ts ON api_request_metrics(status_code, ts_utc)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_ip_ts ON api_request_metrics(ip_hash, ts_utc)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_plan_ts ON api_request_metrics(plan, ts_utc)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_key_ts ON api_request_metrics(api_key_hash, ts_utc)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_ts ON api_request_metrics(ts_utc)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_path_ts ON api_request_metrics(path, ts_utc)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_status_ts ON api_request_metrics(status_code, ts_utc)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_ip_ts ON api_request_metrics(ip_hash, ts_utc)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_plan_ts ON api_request_metrics(plan, ts_utc)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_metrics_key_ts ON api_request_metrics(api_key_hash, ts_utc)"
+            )
 
             conn.commit()
         finally:
@@ -177,15 +198,25 @@ def _resolve_plan(api_key_hash: str | None) -> str:
 
 def should_record_path(path: str) -> bool:
     """
-    Avoid metrics endpoint self-noise and static noise.
+    Decide whether to store this path in private admin metrics.
 
-    Keep /health and /readyz because operational checks matter.
+    Admin metrics keep /health because it helps detect uptime-check pressure.
+    Public stats filter health/readiness later.
     """
-    ignored = {
+    ignored_exact = {
         "/v1/metrics",
         "/favicon.ico",
     }
-    return path not in ignored
+
+    if path in ignored_exact:
+        return False
+
+    ignored_prefixes = (
+        "/static/",
+        "/assets/",
+    )
+
+    return not path.startswith(ignored_prefixes)
 
 
 def record_request_metric(
@@ -418,3 +449,198 @@ def purge_old_metrics() -> int:
             return int(cur.rowcount or 0)
         finally:
             conn.close()
+
+
+def _noise_filter_clause() -> tuple[str, tuple[str, ...]]:
+    placeholders = ",".join("?" for _ in NOISE_PATHS)
+    return f"path NOT IN ({placeholders})", NOISE_PATHS
+
+
+def _bucket_time(ts_utc: str) -> str:
+    """
+    Return approximate UTC timestamp rounded to 10-minute bucket.
+    """
+    try:
+        dt = datetime.fromisoformat(ts_utc)
+        minute_bucket = (dt.minute // 10) * 10
+        bucketed = dt.replace(minute=minute_bucket, second=0, microsecond=0)
+        return bucketed.isoformat()
+    except Exception:
+        return "unknown"
+
+
+def get_public_activity(limit: int = 100) -> dict[str, Any]:
+    """
+    Public anonymized activity feed.
+
+    Does not expose:
+    - raw IPs
+    - ip_hashes
+    - API keys
+    - API key hashes
+    - request IDs
+    """
+    safe_limit = max(1, min(int(limit), 100))
+    noise_clause, noise_params = _noise_filter_clause()
+
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT
+                ts_utc,
+                method,
+                path,
+                status_code,
+                country
+            FROM api_request_metrics
+            WHERE {noise_clause}
+            ORDER BY ts_utc DESC
+            LIMIT ?
+            """,
+            (*noise_params, safe_limit),
+        ).fetchall()
+
+        events = []
+        for row in rows:
+            status_code = int(row["status_code"])
+            if 200 <= status_code <= 299:
+                status_bucket = "2xx"
+            elif 300 <= status_code <= 399:
+                status_bucket = "3xx"
+            elif 400 <= status_code <= 499:
+                status_bucket = "4xx"
+            elif status_code >= 500:
+                status_bucket = "5xx"
+            else:
+                status_bucket = "other"
+
+            events.append(
+                {
+                    "time_bucket_utc": _bucket_time(row["ts_utc"]),
+                    "method": row["method"],
+                    "path": row["path"],
+                    "status_bucket": status_bucket,
+                    "country": row["country"] or "unknown",
+                }
+            )
+
+        return {
+            "status": "ok",
+            "limit": safe_limit,
+            "events": events,
+            "privacy": {
+                "raw_ips_exposed": False,
+                "ip_hashes_exposed": False,
+                "raw_api_keys_exposed": False,
+                "api_key_hashes_exposed": False,
+                "request_ids_exposed": False,
+            },
+        }
+    finally:
+        conn.close()
+
+
+def get_public_stats() -> dict[str, Any]:
+    """
+    Public aggregate stats for landing page and README automation.
+
+    Safe for browser fetch.
+    """
+    now = _utc_now()
+    since_7d = now - timedelta(days=7)
+    since_24h = now - timedelta(hours=24)
+    noise_clause, noise_params = _noise_filter_clause()
+
+    conn = _connect()
+    try:
+        totals_24h = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total_requests,
+                SUM(CASE WHEN status_code BETWEEN 200 AND 399 THEN 1 ELSE 0 END) AS successful_requests,
+                SUM(CASE WHEN status_code BETWEEN 400 AND 499 THEN 1 ELSE 0 END) AS client_errors_4xx,
+                SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END) AS server_errors_5xx,
+                COUNT(DISTINCT ip_hash) AS unique_users
+            FROM api_request_metrics
+            WHERE ts_utc >= ? AND {noise_clause}
+            """,
+            (since_24h.isoformat(), *noise_params),
+        ).fetchone()
+
+        total_7d = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM api_request_metrics
+            WHERE ts_utc >= ? AND {noise_clause}
+            """,
+            (since_7d.isoformat(), *noise_params),
+        ).fetchone()["total"]
+
+        countries = conn.execute(
+            f"""
+            SELECT country, COUNT(*) AS total
+            FROM api_request_metrics
+            WHERE ts_utc >= ? AND {noise_clause}
+            GROUP BY country
+            ORDER BY total DESC
+            LIMIT 10
+            """,
+            (since_24h.isoformat(), *noise_params),
+        ).fetchall()
+
+        country_rows = []
+        top_country = "unknown"
+        top_country_total = 0
+
+        for row in countries:
+            country = row["country"] or "unknown"
+            total = int(row["total"] or 0)
+
+            country_rows.append(
+                {
+                    "country": country,
+                    "total_requests": total,
+                }
+            )
+
+            if total > top_country_total:
+                top_country = country
+                top_country_total = total
+
+        anomaly_threshold = int(getattr(settings, "public_anomaly_threshold", 5000))
+
+        anomaly = {
+            "active": top_country_total >= anomaly_threshold,
+            "signal": "traffic_anomaly_detected"
+            if top_country_total >= anomaly_threshold
+            else "normal_public_activity",
+            "top_country": top_country,
+            "top_country_requests_24h": top_country_total,
+            "threshold": anomaly_threshold,
+        }
+
+        return {
+            "status": "ok",
+            "window_24h": {
+                "total_requests": int(totals_24h["total_requests"] or 0),
+                "successful_requests": int(totals_24h["successful_requests"] or 0),
+                "client_errors_4xx": int(totals_24h["client_errors_4xx"] or 0),
+                "server_errors_5xx": int(totals_24h["server_errors_5xx"] or 0),
+                "unique_users": int(totals_24h["unique_users"] or 0),
+                "countries": country_rows,
+            },
+            "window_7d": {
+                "total_requests": int(total_7d or 0),
+            },
+            "monitoring_signal": anomaly,
+            "privacy": {
+                "only_aggregates": True,
+                "raw_ips_exposed": False,
+                "ip_hashes_exposed": False,
+                "api_keys_exposed": False,
+                "api_key_hashes_exposed": False,
+            },
+        }
+    finally:
+        conn.close()
