@@ -15,6 +15,8 @@ Production improvements:
 - /readyz readiness endpoint
 - Configurable CORS
 - Strong root and integrity endpoints
+- Admin-only /v1/metrics endpoint
+- Public anonymized activity endpoints
 """
 
 from __future__ import annotations
@@ -126,6 +128,15 @@ except ImportError:
     metrics_router = None
     logger.info("Metrics router not found. Optional admin metrics disabled.")
 
+try:
+    from app.routers.public_activity import router as public_activity_router
+
+    HAS_PUBLIC_ACTIVITY = True
+except ImportError:
+    HAS_PUBLIC_ACTIVITY = False
+    public_activity_router = None
+    logger.info("Public activity router not found. Optional public activity disabled.")
+
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
 # ==============================================================================
@@ -202,6 +213,8 @@ async def request_monitoring_middleware(request: Request, call_next):
     - X-Process-Time
     - X-Trace-Timestamp
     - X-Monitoring-Node
+
+    Also records aggregate metrics without storing raw IPs or raw API keys.
     """
     start_time = time.time()
     request_id = str(uuid.uuid4())
@@ -323,6 +336,9 @@ app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 if HAS_METRICS and metrics_router:
     app.include_router(metrics_router, prefix="/v1", tags=["Admin"])
 
+if HAS_PUBLIC_ACTIVITY and public_activity_router:
+    app.include_router(public_activity_router, tags=["Public"])
+
 if HAS_CHAT and chat_router:
     app.include_router(chat_router, tags=["Honest Chat"])
 
@@ -376,6 +392,8 @@ async def root() -> dict[str, Any]:
             "chat": "/v1/chat",
             "status": "/v1/status",
             "integrity": "/integrity",
+            "public_stats": "/public/stats",
+            "public_activity": "/public/activity",
             "docs": "/docs",
         },
     }
@@ -413,6 +431,7 @@ async def readyz() -> dict[str, Any]:
             "diff": True,
             "admin": True,
             "metrics": HAS_METRICS,
+            "public_activity": HAS_PUBLIC_ACTIVITY,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
