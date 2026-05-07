@@ -13,15 +13,15 @@
 [![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
 [![Smoke Test](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml/badge.svg)](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml)
 
+<!-- SAS-LIVE-METRICS:START -->
+Live metrics will be updated automatically.
+<!-- SAS-LIVE-METRICS:END -->
 
 ## Language / Idioma
 
 - [Español](#es)
 - [English](#en)
   
- <!-- SAS-LIVE-METRICS:START -->
-Live metrics will be updated automatically.
-<!-- SAS-LIVE-METRICS:END -->
 ---
 
 <a id="es"></a>
