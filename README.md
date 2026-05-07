@@ -19,6 +19,9 @@
 - [Español](#es)
 - [English](#en)
   
+ <!-- SAS-LIVE-METRICS:START -->
+Live metrics will be updated automatically.
+<!-- SAS-LIVE-METRICS:END -->
 ---
 
 <a id="es"></a>
