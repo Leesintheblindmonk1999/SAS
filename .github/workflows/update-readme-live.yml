@@ -1,0 +1,37 @@
+name: Update README live metrics
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update README live metrics
+        env:
+          SAS_API_URL: https://sas-api.onrender.com
+          GH_TRAFFIC_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/update_readme_live.py
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet README.md; then
+            echo "No README changes."
+            exit 0
+          fi
+
+          git config user.name "sas-live-metrics-bot"
+          git config user.email "actions@github.com"
+          git add README.md
+          git commit -m "docs: update live SAS metrics"
+          git push
