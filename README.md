@@ -14,7 +14,41 @@
 [![Smoke Test](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml/badge.svg)](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml)
 
 <!-- SAS-LIVE-METRICS:START -->
-Live metrics will be updated automatically.
+## Live Operational Snapshot / Estado Operativo Vivo
+
+_Last automated update / Última actualización automática:_ `2026-05-07T21:10:35+00:00`
+
+### English
+
+| Signal | Value |
+|---|---:|
+| API product requests, last 24h | `1` |
+| Successful requests, last 24h | `0` |
+| 4xx errors, last 24h | `1` |
+| 5xx errors, last 24h | `0` |
+| Unique anonymized users, last 24h | `1` |
+| API product requests, last 7d | `1` |
+| Detected country buckets | `unknown=1` |
+| Monitoring signal | `normal_public_activity` |
+| Repository clones | `unavailable` |
+| Unique cloners | `unavailable` |
+
+### Español
+
+| Señal | Valor |
+|---|---:|
+| Requests de producto, últimas 24h | `1` |
+| Requests exitosas, últimas 24h | `0` |
+| Errores 4xx, últimas 24h | `1` |
+| Errores 5xx, últimas 24h | `0` |
+| Usuarios anonimizados únicos, últimas 24h | `1` |
+| Requests de producto, últimos 7d | `1` |
+| Países detectados | `unknown=1` |
+| Señal de monitoreo | `normal_public_activity` |
+| Clones del repositorio | `unavailable` |
+| Clonadores únicos | `unavailable` |
+
+> Public note / Nota pública: generated from aggregated public API metrics and GitHub traffic data. No raw IPs, raw API keys, API key hashes, or request IDs are published.
 <!-- SAS-LIVE-METRICS:END -->
 
 ## Language / Idioma
