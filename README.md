@@ -1,8 +1,9 @@
 # SAS - Symbiotic Autoprotection System
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19689077.svg)](https://doi.org/10.5281/zenodo.19689077)
-[![Landing Page](https://img.shields.io/badge/🌐-Landing_Page-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19702379.svg)](https://doi.org/10.5281/zenodo.19702379)
+[![Landing Page](https://img.shields.io/badge/Landing_Page-online-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
 [![API Online](https://img.shields.io/badge/API-online-brightgreen)](https://sas-api.onrender.com)
+[![PyPI](https://img.shields.io/pypi/v/sas-client?label=sas-client&color=blue)](https://pypi.org/project/sas-client/)
 [![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](https://sas-api.onrender.com/docs)
@@ -14,48 +15,14 @@
 [![Smoke Test](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml/badge.svg)](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml)
 
 <!-- SAS-LIVE-METRICS:START -->
-## Live Operational Snapshot / Estado Operativo Vivo
-
-_Last automated update / Última actualización automática:_ `2026-05-08T19:09:09+00:00`
-
-### English
-
-| Signal | Value |
-|---|---:|
-| API product requests, last 24h | `1` |
-| Successful requests, last 24h | `0` |
-| 4xx errors, last 24h | `1` |
-| 5xx errors, last 24h | `0` |
-| Unique anonymized users, last 24h | `1` |
-| API product requests, last 7d | `1` |
-| Detected country buckets | `unknown=1` |
-| Monitoring signal | `normal_public_activity` |
-| Repository clones | `unavailable` |
-| Unique cloners | `unavailable` |
-
-### Español
-
-| Señal | Valor |
-|---|---:|
-| Requests de producto, últimas 24h | `1` |
-| Requests exitosas, últimas 24h | `0` |
-| Errores 4xx, últimas 24h | `1` |
-| Errores 5xx, últimas 24h | `0` |
-| Usuarios anonimizados únicos, últimas 24h | `1` |
-| Requests de producto, últimos 7d | `1` |
-| Países detectados | `unknown=1` |
-| Señal de monitoreo | `normal_public_activity` |
-| Clones del repositorio | `unavailable` |
-| Clonadores únicos | `unavailable` |
-
-> Public note / Nota pública: generated from aggregated public API metrics and GitHub traffic data. No raw IPs, raw API keys, API key hashes, or request IDs are published.
+Live metrics will be updated automatically.
 <!-- SAS-LIVE-METRICS:END -->
 
 ## Language / Idioma
 
 - [Español](#es)
 - [English](#en)
-  
+
 ---
 
 <a id="es"></a>
@@ -70,62 +37,97 @@ El sistema fue creado por **Gonzalo Emir Durante** y se publica como candidato a
 
 ---
 
-<a id="es-api-publica"></a>
-
 ## API pública en vivo
 
-La API pública oficial de referencia ya está en funcionamiento:
+La API pública oficial de referencia está en funcionamiento:
 
 **[https://sas-api.onrender.com](https://sas-api.onrender.com)**
-
-Health check:
 
 ```bash
 curl https://sas-api.onrender.com/health
 ```
 
-Documentación interactiva de FastAPI:
+Documentación interactiva:
 
 ```text
 https://sas-api.onrender.com/docs
 ```
 
-El autoalojamiento sigue siendo completamente posible bajo los términos de la licencia del proyecto.
-
 ---
 
-<a id="es-documentacion"></a>
+## Cliente Python oficial
+
+SAS está disponible como cliente Python y CLI instalable desde PyPI:
+
+```bash
+pip install sas-client
+```
+
+Repositorio:
+
+```text
+https://github.com/Leesintheblindmonk1999/sas-client
+```
+
+PyPI:
+
+```text
+https://pypi.org/project/sas-client/
+```
+
+### Uso desde Python
+
+```python
+from sas_client import SASClient
+
+client = SASClient(api_key="YOUR_API_KEY")
+
+result = client.diff(
+    text_a="Python is a programming language.",
+    text_b="A python is a snake."
+)
+
+print(result["isi"])
+print(result["verdict"])
+print(result.get("evidence", {}).get("fired_modules"))
+```
+
+### Uso CLI
+
+```bash
+sas health
+sas public-stats
+sas public-activity --limit 10
+sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+```
+
+---
 
 ## Documentación
 
 | Documento | Descripción |
 |---|---|
-| [Security Policy](SECURITY.md) | Reporte de vulnerabilidades, notas de seguridad y divulgación responsable |
-| [Contributing Guide](CONTRIBUTING.md) | Setup de desarrollo, pull requests, testing y reglas de contribución |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Estándares comunitarios y política de convivencia |
-| [Architecture Overview](docs/architecture.md) | Diseño de alto nivel, pipeline de detección, módulos y flujo de datos |
+| [Security Policy](SECURITY.md) | Reporte de vulnerabilidades, seguridad y divulgación responsable |
+| [Contributing Guide](CONTRIBUTING.md) | Setup, pull requests, testing y contribuciones |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Estándares comunitarios |
+| [Architecture Overview](docs/architecture.md) | Arquitectura, pipeline y módulos |
 | [Benchmark JSON](docs/benchmark_complete_20260429_172647.json) | Resultado completo del benchmark |
-| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | Prueba OpenTimestamps del benchmark |
-| [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md) | Template de GitHub Issues para bugs |
-| [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md) | Template de GitHub Issues para mejoras |
+| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | Prueba OpenTimestamps |
 | [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
 
 ---
 
-## 🌐 Manifesto Público / Estándar SAS
+## Manifesto público / Estándar SAS
 
 **Landing page oficial:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
 
-Benchmark, declaración de neutralidad geopolítica, registro TAD, DOI y anclaje OpenTimestamps.
+La landing pública presenta benchmark, neutralidad geopolítica, registro TAD, DOI, anclaje OpenTimestamps, API pública, pricing, actividad pública anonimizada y contacto comercial.
 
 ---
-<a id="es-problema"></a>
 
 ## Problema que resuelve
 
 Los sistemas de IA generativa pueden producir respuestas fluidas pero estructuralmente inconsistentes, lógicamente invertidas, numéricamente erróneas o desconectadas semánticamente del input.
-
-Las métricas tradicionales de similitud suelen fallar en estos casos, porque una alucinación puede conservar fluidez superficial mientras rompe coherencia profunda.
 
 SAS aborda este problema tratando la detección de alucinaciones como una tarea de **auditoría estructural de coherencia**.
 
@@ -142,11 +144,7 @@ SAS no es un oráculo factual universal. Produce evidencia técnica para auditor
 
 ---
 
-<a id="es-kappa"></a>
-
 ## Concepto central: κD = 0.56
-
-SAS utiliza la constante:
 
 ```text
 κD = 0.56
@@ -154,64 +152,30 @@ SAS utiliza la constante:
 
 κD, también llamada **Durante Constant**, funciona como umbral crítico de coherencia dentro del pipeline SAS.
 
-Dentro del framework, κD representa el punto operativo donde el ruido semántico cae por debajo de la coherencia estructural y el significado se vuelve suficientemente estable como para considerarse preservado.
-
-Interpretación operacional:
-
 ```text
 ISI >= κD  -> estructuralmente coherente
 ISI <  κD  -> posible ruptura de manifold / señal de alucinación
 ```
 
-La constante se utiliza junto con el **Invariant Similarity Index (ISI)** y módulos adicionales de detección.
-
 ---
-
-<a id="es-estructura"></a>
-
-## Estructura del proyecto
-
-```text
-SAS/
-├── .gitignore
-├── LICENSE.md
-├── README.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── .github/
-│   └── ISSUE_TEMPLATE/
-│       ├── bug_report.md
-│       └── feature_request.md
-├── docs/
-│   ├── architecture.md
-│   ├── benchmark_complete_20260429_172647.json
-│   └── benchmark_complete_20260429_172647.json.ots
-├── src/
-├── tests/
-├── docker-compose.yml
-└── requirements.txt
-```
-
----
-
-<a id="es-arquitectura"></a>
 
 ## Arquitectura
 
 ```text
-
 SAS/
-├── app/                   # Código principal de la API
-│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
-│   └── services/          # Motor core: TDA + NIG + módulos E9-E12
-├── tests/benchmark_runner.py # Script de benchmark
+├── app/                       # Código principal de la API
+│   ├── main.py                # FastAPI app
+│   ├── routers/               # /v1/audit, /v1/diff, /v1/chat, admin, metrics
+│   └── services/              # Motor core, auth, metrics y servicios auxiliares
+├── docs/
+│   ├── architecture.md
+│   ├── benchmark_complete_20260429_172647.json
+│   └── benchmark_complete_20260429_172647.json.ots
+├── tests/
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
 ```
-
-### Componentes principales
 
 | Componente | Función |
 |---|---|
@@ -222,13 +186,9 @@ SAS/
 | E10 | Grounding factual / detección de inventiva narrativa |
 | E11 | Detección de inconsistencia temporal |
 | E12 | Detección de cambio abrupto de tema |
-| FastAPI | Capa API para audit, diff, chat, health y administración |
-
-Para una explicación técnica más profunda, ver [docs/architecture.md](docs/architecture.md).
+| FastAPI | API para audit, diff, chat, health, admin, métricas y actividad pública |
 
 ---
-
-<a id="es-benchmark"></a>
 
 ## Benchmark
 
@@ -244,7 +204,7 @@ Prueba OpenTimestamps:
 docs/benchmark_complete_20260429_172647.json.ots
 ```
 
-Hash SHA-256 para trazabilidad:
+Hash SHA-256:
 
 ```text
 0713acbbf50e1a0054f545e5eb68078744f9c5a09d4bc370b5224bb81183a6fe
@@ -270,12 +230,6 @@ Hash SHA-256 para trazabilidad:
 | Predicción: alucinación | TP = 976 | FP = 0 |
 | Predicción: limpio | FN = 24 | TN = 1000 |
 
-### Nota sobre el benchmark
-
-Este benchmark incluye ejemplos con alucinación y ejemplos limpios. Las métricas de accuracy, precision, recall y F1 se derivan de la matriz de confusión anterior.
-
-El resultado actual muestra **0 falsos positivos** en el subconjunto limpio evaluado y recall alto sobre el subconjunto con alucinaciones. Esto posiciona a SAS como un detector estructural orientado a precisión.
-
 Para ejecutar el benchmark:
 
 ```bash
@@ -284,17 +238,11 @@ python tests/benchmark_runner.py
 
 ---
 
-<a id="es-planes"></a>
-
 ## Planes y precios
 
 SAS es open source bajo **GPL-3.0 + Durante Invariance License**.
 
-Los planes siguientes corresponden al **servicio API alojado**, no a una modificación ni relajación de la licencia del código fuente.
-
-Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos de GPL-3.0 + Durante Invariance License.
-
-## Planes y precios
+Los planes siguientes corresponden al **servicio API alojado**, soporte comercial, integración privada o licenciamiento empresarial.
 
 | Plan | Uso / Características | Precio |
 | :--- | :--- | :--- |
@@ -305,97 +253,58 @@ Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos
 | **SAS On-Premise License** | Despliegue privado en infraestructura del cliente. Licencia comercial. Integración interna y soporte de implementación. | **Desde 15.000 USD/año** |
 | **Piloto técnico** | Auditoría inicial, integración guiada, informe técnico y validación sobre casos de uso del cliente. | **1.500–3.000 USD, pago único** |
 
-> **Nota de licencia:** el código sigue publicado bajo **GPL-3.0 + Durante Invariance License**. Los planes anteriores corresponden al uso del servicio alojado, soporte comercial, integración privada o licenciamiento empresarial. Cualquier organización puede autoalojar SAS bajo los términos de la licencia correspondiente.
-
 📧 **Consultas comerciales, licencias Enterprise u On-Premise:** duranteg2@gmail.com
-
-### Posicionamiento comercial
-
-SAS está diseñado para auditoría de alucinaciones orientada a precisión. En el benchmark actual, SAS reporta **98.8% de accuracy**, **100% de precision** y **97.6% de recall** sobre 2,000 pares evaluados.
-
-No pagas por una similitud vaga. Pagas por detección estructural auditable, métricas claras, artefactos trazables y evidencia reproducible.
 
 ---
 
-<a id="es-inicio-rapido"></a>
-
 ## Inicio rápido
 
+### Cliente Python
+
+```bash
+pip install sas-client
+```
+
+```python
+from sas_client import SASClient
+
+client = SASClient(api_key="YOUR_API_KEY")
+print(client.health())
+```
+
 ### API pública alojada
-
-La API pública de referencia ya está en funcionamiento:
-
-**[https://sas-api.onrender.com](https://sas-api.onrender.com)**
-
-Health check:
 
 ```bash
 curl https://sas-api.onrender.com/health
 ```
 
-### Opción 1: Docker / autoalojamiento
+### Docker / autoalojamiento
 
 ```bash
 git clone https://github.com/Leesintheblindmonk1999/SAS.git
 cd SAS
-
 docker compose up --build
 ```
 
-La API local debería estar disponible en:
-
-```text
-http://localhost:8000
-```
-
-Health check local:
-
-```bash
-curl http://localhost:8000/health
-```
-
----
-
-### Opción 2: instalación local con Python
+### Instalación local con Python
 
 ```bash
 git clone https://github.com/Leesintheblindmonk1999/SAS.git
 cd SAS
-
 python -m venv .venv
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Activar entorno:
-
-```bash
-# Linux/macOS
-source .venv/bin/activate
-```
+Windows PowerShell:
 
 ```powershell
-# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
-```
-
-Instalar dependencias:
-
-```bash
-pip install -r requirements.txt
-```
-
-Ejecutar API:
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-<a id="es-configuracion"></a>
-
 ## Configuración
-
-Crear un archivo local `.env`:
 
 ```env
 ADMIN_SECRET=change-this-admin-secret
@@ -406,23 +315,11 @@ CORS_ALLOW_ORIGINS=*
 
 No subir archivos `.env` a repositorios públicos.
 
-Para producción:
-
-```env
-CORS_ALLOW_ORIGINS=https://yourdomain.com
-ADMIN_SECRET=use-a-strong-random-secret
-FREE_REQUESTS_PER_DAY=50
-```
-
 ---
-
-<a id="es-auth"></a>
 
 ## Autenticación API
 
 La mayoría de endpoints requieren una API key.
-
-### API pública alojada
 
 Para el servicio alojado, las API keys son emitidas por el operador del servicio.
 
@@ -432,25 +329,13 @@ Contacto:
 duranteg2@gmail.com
 ```
 
-### Autoalojamiento
-
-Si estás ejecutando tu propia instancia, puedes generar una API key usando el endpoint admin:
+Para autoalojamiento:
 
 ```bash
-curl -X POST http://localhost:8000/admin/generate-key \
-  -H "X-Admin-Secret: change-this-admin-secret"
+curl -X POST http://localhost:8000/admin/generate-key   -H "X-Admin-Secret: change-this-admin-secret"
 ```
 
-Ejemplo de respuesta:
-
-```json
-{
-  "api_key": "sas_xxxxxxxxxxxxxxxxxxxxx",
-  "created_at": "2026-04-29T00:00:00Z"
-}
-```
-
-Usar la API key en requests:
+Usar la API key:
 
 ```bash
 -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
@@ -458,23 +343,7 @@ Usar la API key en requests:
 
 ---
 
-<a id="es-ejemplos-api"></a>
-
 ## Ejemplos de API
-
-Los ejemplos siguientes usan la API pública alojada:
-
-```text
-https://sas-api.onrender.com
-```
-
-Para autoalojamiento local, reemplazar por:
-
-```text
-http://localhost:8000
-```
-
----
 
 ### Health check
 
@@ -482,101 +351,32 @@ http://localhost:8000
 curl https://sas-api.onrender.com/health
 ```
 
-Ejemplo:
-
-```json
-{
-  "status": "ok",
-  "service": "SAS",
-  "version": "1.0"
-}
-```
-
----
-
-### Auditar una respuesta generada
+### Auditar una respuesta
 
 ```bash
-curl -X POST https://sas-api.onrender.com/v1/audit \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
+curl -X POST https://sas-api.onrender.com/v1/audit   -H "Content-Type: application/json"   -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"   -d '{
     "source": "The Eiffel Tower is located in Paris, France.",
     "response": "The Eiffel Tower is located in Berlin, Germany.",
     "experimental": true
   }'
 ```
 
-Ejemplo de respuesta:
-
-```json
-{
-  "isi": 0.0,
-  "kappa_d": 0.56,
-  "detected_hallucination": true,
-  "verdict": "MANIFOLD_RUPTURE",
-  "fired_modules": [
-    "E9 Logical Contradiction",
-    "E10 Fact Grounding"
-  ]
-}
-```
-
----
-
 ### Comparar dos textos
 
 ```bash
-curl -X POST https://sas-api.onrender.com/v1/diff \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
+curl -X POST https://sas-api.onrender.com/v1/diff   -H "Content-Type: application/json"   -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"   -d '{
     "text_a": "Python is commonly used for automation and data analysis.",
     "text_b": "Python is mainly a type of tropical snake used in weather forecasting.",
     "experimental": true
   }'
 ```
 
-Ejemplo:
-
-```json
-{
-  "isi": 0.0,
-  "kappa_d": 0.56,
-  "verdict": "MANIFOLD_RUPTURE",
-  "detected_hallucination": true
-}
-```
-
 ---
-
-### Chat endpoint
-
-```bash
-curl -X POST https://sas-api.onrender.com/v1/chat \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
-    "message": "Explain what κD means in SAS."
-  }'
-```
-
----
-
-<a id="es-modulos"></a>
 
 ## Control de módulos
 
-Los módulos experimentales pueden activarse mediante variables de entorno:
-
 ```env
 MODULES_ENABLED=E9,E10,E11,E12
-```
-
-O activarse selectivamente:
-
-```env
-MODULES_ENABLED=E9,E11
 ```
 
 | Módulo | Nombre | Función |
@@ -586,36 +386,38 @@ MODULES_ENABLED=E9,E11
 | E11 | Temporal Inconsistency | Detecta secuencias temporales incompatibles |
 | E12 | Topic Shift | Detecta cambios abruptos de tema sin señales de transición |
 
-Los módulos actúan como factores de penalización independientes y no reemplazan el cálculo core ISI/TDA.
+---
+
+## Métricas públicas anonimizadas
+
+```text
+https://sas-api.onrender.com/public/stats
+https://sas-api.onrender.com/public/activity?limit=100
+```
+
+Estos endpoints alimentan la landing pública y el README vivo.
 
 ---
 
-<a id="es-zenodo"></a>
-
 ## Zenodo y registro
 
-- **Zenodo DOI:** [10.5281/zenodo.19689077](https://doi.org/10.5281/zenodo.19689077)
+- **Zenodo DOI:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
 - **Registro TAD:** `EX-2026-18792778`
 - **Autor:** Gonzalo Emir Durante
 - **Licencia:** [GPL-3.0 + Durante Invariance License](LICENSE.md)
 - **API alojada:** [https://sas-api.onrender.com](https://sas-api.onrender.com)
+- **Cliente PyPI:** [https://pypi.org/project/sas-client/](https://pypi.org/project/sas-client/)
 
 ---
 
-<a id="es-citacion"></a>
-
 ## Citación
-
-Si usas SAS, cita el proyecto como:
 
 ```text
 Durante, G. E. (2026). SAS - Symbiotic Autoprotection System:
 A structural coherence audit framework for hallucination detection
 in generative AI systems. Zenodo.
-https://doi.org/10.5281/zenodo.19689077
+https://doi.org/10.5281/zenodo.19702379
 ```
-
-### BibTeX
 
 ```bibtex
 @software{durante_2026_sas,
@@ -623,60 +425,32 @@ https://doi.org/10.5281/zenodo.19689077
   title        = {SAS - Symbiotic Autoprotection System},
   year         = {2026},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.19689077},
-  url          = {https://doi.org/10.5281/zenodo.19689077}
+  doi          = {10.5281/zenodo.19702379},
+  url          = {https://doi.org/10.5281/zenodo.19702379}
 }
 ```
 
 ---
 
-<a id="es-licencia"></a>
-
 ## Licencia
-
-Este proyecto se publica bajo:
 
 ```text
 GPL-3.0 + Durante Invariance License
 ```
 
-La cláusula adicional Durante Invariance requiere atribución por el uso, implementación o distribución de la constante `κD = 0.56` para detección de invariancia semántica, detección de alucinaciones o propósitos similares.
-
 Ver [LICENSE.md](LICENSE.md) para el texto completo.
-
-### Servicio alojado vs licencia del código
-
-Los planes **SAS Free**, **SAS Pro** y **SAS Enterprise** corresponden al servicio API alojado.
-
-El código fuente sigue bajo **GPL-3.0 + Durante Invariance License**. Puedes autoalojar tu propia instancia bajo esos términos.
 
 ---
 
-<a id="es-desarrollo"></a>
-
 ## Desarrollo
-
-Ejecutar tests:
 
 ```bash
 pytest
-```
-
-Ejecutar benchmark:
-
-```bash
 python tests/benchmark_runner.py
-```
-
-Ejecutar API local:
-
-```bash
 uvicorn app.main:app --reload
 ```
 
 ---
-
-<a id="es-seguridad"></a>
 
 ## Notas de seguridad
 
@@ -686,12 +460,11 @@ uvicorn app.main:app --reload
 - Restringir CORS en producción.
 - Mantener API keys privadas.
 - Proteger `/admin/generate-key` con un admin secret fuerte.
+- No exponer secretos SMTP, tokens PyPI, API keys ni admin secrets.
 
 Para reportes de vulnerabilidad, ver [SECURITY.md](SECURITY.md).
 
 ---
-
-<a id="es-alcance-y-limitaciones"></a>
 
 ## Alcance y limitaciones
 
@@ -707,37 +480,17 @@ Limitaciones conocidas:
 
 ---
 
-<a id="es-autor"></a>
-
 ## Autor
 
 **Gonzalo Emir Durante**
 
 Autor de SAS, Omni-Scanner API y `κD = 0.56`.
 
-Repositorio:
-
-```text
-https://github.com/Leesintheblindmonk1999/SAS
-```
-
-API alojada:
-
-```text
-https://sas-api.onrender.com
-```
-
-DOI:
-
-```text
-https://doi.org/10.5281/zenodo.19689077
-```
-
-Contacto:
-
-```text
-duranteg2@gmail.com
-```
+- Repositorio: <https://github.com/Leesintheblindmonk1999/SAS>
+- Cliente Python: <https://github.com/Leesintheblindmonk1999/sas-client>
+- API alojada: <https://sas-api.onrender.com>
+- DOI: <https://doi.org/10.5281/zenodo.19702379>
+- Contacto: duranteg2@gmail.com
 
 ---
 
@@ -753,63 +506,97 @@ The system is authored by **Gonzalo Emir Durante** and published as an open tech
 
 ---
 
-<a id="en-live-api"></a>
-
 ## Live Public API
 
 The official hosted reference API is available at:
 
 **[https://sas-api.onrender.com](https://sas-api.onrender.com)**
 
-Health check:
-
 ```bash
 curl https://sas-api.onrender.com/health
 ```
 
-FastAPI interactive documentation:
+Interactive documentation:
 
 ```text
 https://sas-api.onrender.com/docs
 ```
 
-Self-hosting remains fully supported under the project license.
-
 ---
 
-<a id="en-documentation"></a>
+## Official Python Client
+
+SAS is available as an installable Python client and CLI from PyPI:
+
+```bash
+pip install sas-client
+```
+
+Repository:
+
+```text
+https://github.com/Leesintheblindmonk1999/sas-client
+```
+
+PyPI:
+
+```text
+https://pypi.org/project/sas-client/
+```
+
+### Python usage
+
+```python
+from sas_client import SASClient
+
+client = SASClient(api_key="YOUR_API_KEY")
+
+result = client.diff(
+    text_a="Python is a programming language.",
+    text_b="A python is a snake."
+)
+
+print(result["isi"])
+print(result["verdict"])
+print(result.get("evidence", {}).get("fired_modules"))
+```
+
+### CLI usage
+
+```bash
+sas health
+sas public-stats
+sas public-activity --limit 10
+sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+```
+
+---
 
 ## Documentation
 
 | Document | Description |
 |---|---|
-| [Security Policy](SECURITY.md) | Vulnerability reporting, deployment security notes, and responsible disclosure |
-| [Contributing Guide](CONTRIBUTING.md) | Development setup, pull request process, testing, and contribution rules |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards and enforcement policy |
-| [Architecture Overview](docs/architecture.md) | High-level system design, detection pipeline, modules, and data flow |
+| [Security Policy](SECURITY.md) | Vulnerability reporting, security notes, and responsible disclosure |
+| [Contributing Guide](CONTRIBUTING.md) | Setup, pull requests, testing, and contribution rules |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards |
+| [Architecture Overview](docs/architecture.md) | Architecture, pipeline, and modules |
 | [Benchmark JSON](docs/benchmark_complete_20260429_172647.json) | Full benchmark output |
-| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | OpenTimestamps proof for the benchmark |
-| [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md) | GitHub issue template for bugs |
-| [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md) | GitHub issue template for enhancement proposals |
+| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | OpenTimestamps proof |
 | [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
 
 ---
 
-## 🌐 Public Manifesto / SAS Standard
+## Public Manifesto / SAS Standard
 
 **Official Landing Page:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
 
-Benchmark, Declaration of Geopolitical Neutrality, TAD Registration, DOI, and OpenTimestamps Anchoring.
+The public landing page presents benchmark evidence, geopolitical neutrality statement, TAD registry, DOI, OpenTimestamps anchoring, public API, pricing, anonymized public activity, and commercial contact.
 
 ---
-
-<a id="en-problem"></a>
 
 ## Problem
 
 Generative AI systems can produce fluent outputs that are structurally inconsistent, logically inverted, numerically wrong, or semantically disconnected from the input.
-
-Traditional similarity metrics often fail to detect these cases because hallucinations may preserve surface fluency while breaking deeper coherence.
 
 SAS addresses this by treating hallucination detection as a **structural coherence audit** problem.
 
@@ -826,11 +613,7 @@ SAS is not a universal factual oracle. It provides technical evidence for struct
 
 ---
 
-<a id="en-kappa"></a>
-
 ## Core Concept: κD = 0.56
-
-SAS uses the constant:
 
 ```text
 κD = 0.56
@@ -838,63 +621,30 @@ SAS uses the constant:
 
 κD, also referred to as the **Durante Constant**, is used as a critical coherence threshold in the SAS pipeline.
 
-Within the framework, κD represents the operational point where semantic noise collapses below structural coherence and meaning becomes stable enough to be treated as preserved.
-
-Operational interpretation:
-
 ```text
 ISI >= κD  -> structurally coherent
 ISI <  κD  -> potential manifold rupture / hallucination signal
 ```
 
-The constant is used in combination with the **Invariant Similarity Index (ISI)** and additional detection modules.
-
 ---
-
-<a id="en-project-structure"></a>
-
-## Project Structure
-
-```text
-SAS/
-├── .gitignore
-├── LICENSE.md
-├── README.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── .github/
-│   └── ISSUE_TEMPLATE/
-│       ├── bug_report.md
-│       └── feature_request.md
-├── docs/
-│   ├── architecture.md
-│   ├── benchmark_complete_20260429_172647.json
-│   └── benchmark_complete_20260429_172647.json.ots
-├── src/
-├── tests/
-├── docker-compose.yml
-└── requirements.txt
-```
-
----
-
-<a id="en-architecture"></a>
 
 ## Architecture
 
 ```text
 SAS/
-├── app/                   # Main API code
-│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
-│   └── services/          # Core engine: TDA + NIG + E9-E12 modules
-├── tests/benchmark_runner.py # Benchmark execution script
+├── app/                       # Main API code
+│   ├── main.py                # FastAPI app
+│   ├── routers/               # /v1/audit, /v1/diff, /v1/chat, admin, metrics
+│   └── services/              # Core engine, auth, metrics, auxiliary services
+├── docs/
+│   ├── architecture.md
+│   ├── benchmark_complete_20260429_172647.json
+│   └── benchmark_complete_20260429_172647.json.ots
+├── tests/
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
 ```
-
-### Core Components
 
 | Component | Purpose |
 |---|---|
@@ -905,13 +655,9 @@ SAS/
 | E10 | Fact grounding / narrative inventiveness check |
 | E11 | Temporal inconsistency detection |
 | E12 | Abrupt topic shift detection |
-| FastAPI | API layer for audit, diff, chat, health, and admin functions |
-
-For a deeper technical view, see [docs/architecture.md](docs/architecture.md).
+| FastAPI | API for audit, diff, chat, health, admin, metrics, and public activity |
 
 ---
-
-<a id="en-benchmark"></a>
 
 ## Benchmark Results
 
@@ -927,7 +673,7 @@ OpenTimestamps proof:
 docs/benchmark_complete_20260429_172647.json.ots
 ```
 
-SHA-256 traceability hash:
+SHA-256 hash:
 
 ```text
 0713acbbf50e1a0054f545e5eb68078744f9c5a09d4bc370b5224bb81183a6fe
@@ -953,12 +699,6 @@ SHA-256 traceability hash:
 | Predicted hallucination | TP = 976 | FP = 0 |
 | Predicted clean | FN = 24 | TN = 1000 |
 
-### Benchmark Note
-
-This benchmark includes both hallucination and clean examples. The reported accuracy, precision, recall, and F1 score are derived from the confusion matrix above.
-
-The current benchmark shows **zero false positives** on the evaluated clean subset and high recall on the hallucination subset. This supports SAS as a precision-oriented structural hallucination detector.
-
 To reproduce the benchmark:
 
 ```bash
@@ -967,17 +707,11 @@ python tests/benchmark_runner.py
 
 ---
 
-<a id="en-pricing"></a>
-
 ## Plans and Pricing
 
 SAS is open source under **GPL-3.0 + Durante Invariance License**.
 
-The plans below refer to the **hosted SAS API service**, not to a modification or relaxation of the source-code license.
-
-Anyone may self-host their own SAS instance under the terms of GPL-3.0 + Durante Invariance License.
-
-## Plans and Pricing
+The plans below refer to the **hosted SAS API service**, commercial support, private integration, or enterprise licensing.
 
 | Plan | Usage / Features | Price |
 | :--- | :--- | :--- |
@@ -988,99 +722,58 @@ Anyone may self-host their own SAS instance under the terms of GPL-3.0 + Durante
 | **SAS On-Premise License** | Private deployment on customer infrastructure. Commercial license. Internal integration and implementation support. | **From USD 15,000/year** |
 | **Technical Pilot** | Initial audit, guided integration, technical report, and validation on customer-specific use cases. | **USD 1,500–3,000 one-time payment** |
 
-> **License note:** the code remains published under **GPL-3.0 + Durante Invariance License**. The plans above refer to the hosted service, commercial support, private integration, or enterprise licensing. Any organization may self-host SAS under the applicable license terms.
-
 📧 **Commercial inquiries, Enterprise licensing, or On-Premise deployment:** duranteg2@gmail.com
-
-📧 **Interested in an Enterprise license or need a custom plan?** Contact: **duranteg2@gmail.com**
-
-### Commercial Positioning
-
-SAS is designed for precision-oriented hallucination auditing. In the current benchmark, SAS reports **98.8% accuracy**, **100% precision**, and **97.6% recall** across 2,000 evaluated pairs.
-
-You are not paying for vague similarity scoring. You are paying for auditable structural detection with clear metrics, traceable benchmark artifacts, and reproducible evidence.
 
 ---
 
-<a id="en-quick-start"></a>
-
 ## Quick Start
 
-### Public Hosted API
+### Python client
 
-The public reference API is already running:
+```bash
+pip install sas-client
+```
 
-**[https://sas-api.onrender.com](https://sas-api.onrender.com)**
+```python
+from sas_client import SASClient
 
-Health check:
+client = SASClient(api_key="YOUR_API_KEY")
+print(client.health())
+```
+
+### Public hosted API
 
 ```bash
 curl https://sas-api.onrender.com/health
 ```
 
-### Option 1: Docker Self-Hosting
+### Docker self-hosting
 
 ```bash
 git clone https://github.com/Leesintheblindmonk1999/SAS.git
 cd SAS
-
 docker compose up --build
 ```
 
-The local API should be available at:
-
-```text
-http://localhost:8000
-```
-
-Local health check:
-
-```bash
-curl http://localhost:8000/health
-```
-
----
-
-### Option 2: Local Python Install
+### Local Python install
 
 ```bash
 git clone https://github.com/Leesintheblindmonk1999/SAS.git
 cd SAS
-
 python -m venv .venv
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Activate the environment:
-
-```bash
-# Linux/macOS
-source .venv/bin/activate
-```
+Windows PowerShell:
 
 ```powershell
-# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the API:
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-<a id="en-configuration"></a>
-
 ## Configuration
-
-Create a local `.env` file:
 
 ```env
 ADMIN_SECRET=change-this-admin-secret
@@ -1091,23 +784,11 @@ CORS_ALLOW_ORIGINS=*
 
 Do not commit `.env` files to public repositories.
 
-For production deployments:
-
-```env
-CORS_ALLOW_ORIGINS=https://yourdomain.com
-ADMIN_SECRET=use-a-strong-random-secret
-FREE_REQUESTS_PER_DAY=50
-```
-
 ---
-
-<a id="en-auth"></a>
 
 ## API Authentication
 
 Most API endpoints require an API key.
-
-### Hosted Public API
 
 For the hosted service, API keys are issued by the service operator.
 
@@ -1117,25 +798,13 @@ Contact:
 duranteg2@gmail.com
 ```
 
-### Self-hosting
-
-If you are running your own instance, you can generate an API key using the admin endpoint:
+For self-hosting:
 
 ```bash
-curl -X POST http://localhost:8000/admin/generate-key \
-  -H "X-Admin-Secret: change-this-admin-secret"
+curl -X POST http://localhost:8000/admin/generate-key   -H "X-Admin-Secret: change-this-admin-secret"
 ```
 
-Example response:
-
-```json
-{
-  "api_key": "sas_xxxxxxxxxxxxxxxxxxxxx",
-  "created_at": "2026-04-29T00:00:00Z"
-}
-```
-
-Use the returned key in API requests:
+Use the API key:
 
 ```bash
 -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
@@ -1143,23 +812,7 @@ Use the returned key in API requests:
 
 ---
 
-<a id="en-api-examples"></a>
-
 ## API Examples
-
-The examples below use the hosted public API:
-
-```text
-https://sas-api.onrender.com
-```
-
-For local self-hosting, replace it with:
-
-```text
-http://localhost:8000
-```
-
----
 
 ### Health Check
 
@@ -1167,101 +820,32 @@ http://localhost:8000
 curl https://sas-api.onrender.com/health
 ```
 
-Example response:
-
-```json
-{
-  "status": "ok",
-  "service": "SAS",
-  "version": "1.0"
-}
-```
-
----
-
-### Audit a Generated Response
+### Audit a generated response
 
 ```bash
-curl -X POST https://sas-api.onrender.com/v1/audit \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
+curl -X POST https://sas-api.onrender.com/v1/audit   -H "Content-Type: application/json"   -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"   -d '{
     "source": "The Eiffel Tower is located in Paris, France.",
     "response": "The Eiffel Tower is located in Berlin, Germany.",
     "experimental": true
   }'
 ```
 
-Example response:
-
-```json
-{
-  "isi": 0.0,
-  "kappa_d": 0.56,
-  "detected_hallucination": true,
-  "verdict": "MANIFOLD_RUPTURE",
-  "fired_modules": [
-    "E9 Logical Contradiction",
-    "E10 Fact Grounding"
-  ]
-}
-```
-
----
-
-### Compare Two Texts
+### Compare two texts
 
 ```bash
-curl -X POST https://sas-api.onrender.com/v1/diff \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
+curl -X POST https://sas-api.onrender.com/v1/diff   -H "Content-Type: application/json"   -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"   -d '{
     "text_a": "Python is commonly used for automation and data analysis.",
     "text_b": "Python is mainly a type of tropical snake used in weather forecasting.",
     "experimental": true
   }'
 ```
 
-Example response:
-
-```json
-{
-  "isi": 0.0,
-  "kappa_d": 0.56,
-  "verdict": "MANIFOLD_RUPTURE",
-  "detected_hallucination": true
-}
-```
-
 ---
-
-### Chat Endpoint
-
-```bash
-curl -X POST https://sas-api.onrender.com/v1/chat \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
-  -d '{
-    "message": "Explain what κD means in SAS."
-  }'
-```
-
----
-
-<a id="en-modules"></a>
 
 ## Module Controls
 
-Experimental modules can be enabled through environment configuration:
-
 ```env
 MODULES_ENABLED=E9,E10,E11,E12
-```
-
-Or selectively disabled:
-
-```env
-MODULES_ENABLED=E9,E11
 ```
 
 | Module | Name | Function |
@@ -1271,36 +855,38 @@ MODULES_ENABLED=E9,E11
 | E11 | Temporal Inconsistency | Detects incompatible temporal sequences |
 | E12 | Topic Shift | Detects abrupt topic changes without transition signals |
 
-Modules are used as independent penalty factors and do not replace the core ISI/TDA calculation.
+---
+
+## Public Anonymized Metrics
+
+```text
+https://sas-api.onrender.com/public/stats
+https://sas-api.onrender.com/public/activity?limit=100
+```
+
+These endpoints feed the public landing page and the live README section.
 
 ---
 
-<a id="en-zenodo"></a>
-
 ## Zenodo and Registration
 
-- **Zenodo DOI:** [10.5281/zenodo.19689077](https://doi.org/10.5281/zenodo.19689077)
+- **Zenodo DOI:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
 - **TAD Registry:** `EX-2026-18792778`
 - **Author:** Gonzalo Emir Durante
 - **License:** [GPL-3.0 + Durante Invariance License](LICENSE.md)
 - **Hosted API:** [https://sas-api.onrender.com](https://sas-api.onrender.com)
+- **PyPI Client:** [https://pypi.org/project/sas-client/](https://pypi.org/project/sas-client/)
 
 ---
 
-<a id="en-citation"></a>
-
 ## Citation
-
-If you use SAS, cite the project as:
 
 ```text
 Durante, G. E. (2026). SAS - Symbiotic Autoprotection System:
 A structural coherence audit framework for hallucination detection
 in generative AI systems. Zenodo.
-https://doi.org/10.5281/zenodo.19689077
+https://doi.org/10.5281/zenodo.19702379
 ```
-
-### BibTeX
 
 ```bibtex
 @software{durante_2026_sas,
@@ -1308,60 +894,32 @@ https://doi.org/10.5281/zenodo.19689077
   title        = {SAS - Symbiotic Autoprotection System},
   year         = {2026},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.19689077},
-  url          = {https://doi.org/10.5281/zenodo.19689077}
+  doi          = {10.5281/zenodo.19702379},
+  url          = {https://doi.org/10.5281/zenodo.19702379}
 }
 ```
 
 ---
 
-<a id="en-license"></a>
-
 ## License
-
-This project is licensed under:
 
 ```text
 GPL-3.0 + Durante Invariance License
 ```
 
-The additional Durante Invariance clause requires attribution for use, implementation, or distribution of the `κD = 0.56` constant for semantic invariance detection, hallucination detection, or similar purposes.
-
 See [LICENSE.md](LICENSE.md) for the full license text.
-
-### Hosted Service vs Source Code License
-
-The **SAS Free**, **SAS Pro**, and **SAS Enterprise** plans refer to the hosted SAS API service.
-
-The source code remains licensed under **GPL-3.0 + Durante Invariance License**. You may self-host your own instance under those license terms.
 
 ---
 
-<a id="en-development"></a>
-
 ## Development
-
-Run tests:
 
 ```bash
 pytest
-```
-
-Run benchmark:
-
-```bash
 python tests/benchmark_runner.py
-```
-
-Run API locally:
-
-```bash
 uvicorn app.main:app --reload
 ```
 
 ---
-
-<a id="en-security"></a>
 
 ## Security Notes
 
@@ -1370,13 +928,12 @@ uvicorn app.main:app --reload
 - Use HTTPS in production.
 - Restrict CORS origins in production.
 - Keep API keys private.
-- The `/admin/generate-key` endpoint must be protected by a strong admin secret.
+- Protect `/admin/generate-key` with a strong admin secret.
+- Do not expose SMTP secrets, PyPI tokens, API keys, or admin secrets.
 
 For vulnerability reports, see [SECURITY.md](SECURITY.md).
 
 ---
-
-<a id="en-scope-and-limitations"></a>
 
 ## Scope and Limitations
 
@@ -1392,34 +949,14 @@ Known limitations:
 
 ---
 
-<a id="en-author"></a>
-
 ## Author
 
 **Gonzalo Emir Durante**
 
 Author of SAS, Omni-Scanner API, and `κD = 0.56`.
 
-Repository:
-
-```text
-https://github.com/Leesintheblindmonk1999/SAS
-```
-
-Hosted API:
-
-```text
-https://sas-api.onrender.com
-```
-
-DOI:
-
-```text
-https://doi.org/10.5281/zenodo.19689077
-```
-
-Contact:
-
-```text
-duranteg2@gmail.com
-```
+- Repository: <https://github.com/Leesintheblindmonk1999/SAS>
+- Python client: <https://github.com/Leesintheblindmonk1999/sas-client>
+- Hosted API: <https://sas-api.onrender.com>
+- DOI: <https://doi.org/10.5281/zenodo.19702379>
+- Contact: duranteg2@gmail.com
