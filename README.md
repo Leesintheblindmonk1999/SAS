@@ -294,13 +294,20 @@ Los planes siguientes corresponden al **servicio API alojado**, no a una modific
 
 Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos de GPL-3.0 + Durante Invariance License.
 
+## Planes y precios
+
 | Plan | Uso / Características | Precio |
 | :--- | :--- | :--- |
-| **SAS Free** | 50 requests/día. Autenticación por API Key. Ideal para desarrollo, pruebas y evaluación. | **Gratis** |
-| **SAS Pro** | 10,000 requests/mes. Sin límite de concurrencia. Soporte prioritario por email. | **49 USD/mes** o **490 USD/año** |
-| **SAS Enterprise** | Requests ilimitadas o paquete personalizado. SLA garantizado 99.9%. Licencia On-Premise opcional. Soporte 24/7. | **Cotización** — desde **499 USD/mes** |
+| **SAS Free** | 50 requests/día. API Key incluida. Ideal para pruebas, desarrollo individual y evaluación técnica inicial. | **Gratis** |
+| **SAS Developer / Pro** | 10.000 requests/mes. API Key. Acceso a la API pública alojada. Soporte básico por email. | **99 USD/mes** |
+| **SAS Team** | 50.000 requests/mes. Uso para equipos. Soporte prioritario. Adecuado para startups RAG, equipos ML y validación interna. | **299 USD/mes** |
+| **SAS Enterprise Cloud** | Volumen alto o paquete personalizado. Soporte directo. Integración privada. SLA según acuerdo comercial. | **Desde 1.500 USD/mes** |
+| **SAS On-Premise License** | Despliegue privado en infraestructura del cliente. Licencia comercial. Integración interna y soporte de implementación. | **Desde 15.000 USD/año** |
+| **Piloto técnico** | Auditoría inicial, integración guiada, informe técnico y validación sobre casos de uso del cliente. | **1.500–3.000 USD, pago único** |
 
-📧 **¿Interesado en una licencia Enterprise o necesitas un plan a medida?** Contacto: **duranteg2@gmail.com**
+> **Nota de licencia:** el código sigue publicado bajo **GPL-3.0 + Durante Invariance License**. Los planes anteriores corresponden al uso del servicio alojado, soporte comercial, integración privada o licenciamiento empresarial. Cualquier organización puede autoalojar SAS bajo los términos de la licencia correspondiente.
+
+📧 **Consultas comerciales, licencias Enterprise u On-Premise:** duranteg2@gmail.com
 
 ### Posicionamiento comercial
 
@@ -970,11 +977,20 @@ The plans below refer to the **hosted SAS API service**, not to a modification o
 
 Anyone may self-host their own SAS instance under the terms of GPL-3.0 + Durante Invariance License.
 
+## Plans and Pricing
+
 | Plan | Usage / Features | Price |
 | :--- | :--- | :--- |
-| **SAS Free** | 50 requests/day. API key authentication. Ideal for development, testing, and evaluation. | **Free** |
-| **SAS Pro** | 10,000 requests/month. No concurrency limit. Priority email support. | **$49 USD/month** or **$490 USD/year** |
-| **SAS Enterprise** | Unlimited requests or custom package. Guaranteed SLA 99.9%. Optional On-Premise license. 24/7 support. | **Custom quote** — starting at **$499/month** |
+| **SAS Free** | 50 requests/day. API Key included. Ideal for testing, individual development, and initial technical evaluation. | **Free** |
+| **SAS Developer / Pro** | 10,000 requests/month. API Key. Access to the hosted public API. Basic email support. | **USD 99/month** |
+| **SAS Team** | 50,000 requests/month. Team usage. Priority support. Suitable for RAG startups, ML teams, and internal validation. | **USD 299/month** |
+| **SAS Enterprise Cloud** | High-volume usage or custom request package. Direct support. Private integration. SLA according to commercial agreement. | **From USD 1,500/month** |
+| **SAS On-Premise License** | Private deployment on customer infrastructure. Commercial license. Internal integration and implementation support. | **From USD 15,000/year** |
+| **Technical Pilot** | Initial audit, guided integration, technical report, and validation on customer-specific use cases. | **USD 1,500–3,000 one-time payment** |
+
+> **License note:** the code remains published under **GPL-3.0 + Durante Invariance License**. The plans above refer to the hosted service, commercial support, private integration, or enterprise licensing. Any organization may self-host SAS under the applicable license terms.
+
+📧 **Commercial inquiries, Enterprise licensing, or On-Premise deployment:** duranteg2@gmail.com
 
 📧 **Interested in an Enterprise license or need a custom plan?** Contact: **duranteg2@gmail.com**
 
