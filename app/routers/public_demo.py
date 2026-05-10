@@ -138,9 +138,11 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
     """
     Return only modules that actually fired.
 
-    Some internal evidence fields may include diagnostic module notes for E9-E12
-    even when triggered=False. The public demo should expose only triggered
-    modules to avoid confusing users.
+    Internal evidence fields may include diagnostic strings such as:
+    '[E10] skipped: local knowledge base not configured; no penalty applied'.
+
+    Those are useful for internal debugging, but the public demo should expose
+    only modules that actually triggered.
     """
     evidence = raw.get("evidence") if isinstance(raw.get("evidence"), dict) else {}
 
@@ -161,13 +163,40 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
 
         for module in item:
             if isinstance(module, str):
-                fired.append(module)
+                text = module.strip()
+                lower = text.lower()
+
+                if not text:
+                    continue
+
+                skip_markers = [
+                    "skipped",
+                    "not configured",
+                    "no penalty applied",
+                    "triggered=false",
+                    '"triggered": false',
+                    "'triggered': false",
+                    "enabled=false",
+                    '"enabled": false',
+                    "'enabled': false",
+                ]
+
+                if any(marker in lower for marker in skip_markers):
+                    continue
+
+                fired.append(text)
                 continue
 
             if isinstance(module, dict):
-                triggered = bool(module.get("triggered", False))
-                if not triggered:
+                if "triggered" in module and not bool(module.get("triggered")):
                     continue
+
+                if "penalty" in module:
+                    try:
+                        if float(module.get("penalty", 1.0)) >= 1.0 and not bool(module.get("triggered", False)):
+                            continue
+                    except (TypeError, ValueError):
+                        pass
 
                 code = module.get("code")
                 name = module.get("name")
@@ -181,30 +210,15 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
                 else:
                     fired.append(str(module))
 
-    # Deduplicate while preserving order.
     seen = set()
     clean = []
+
     for item in fired:
         if item not in seen:
             seen.add(item)
             clean.append(item)
 
     return clean
-
-
-def _extract_manipulation_alert(raw: dict[str, Any]) -> dict[str, Any]:
-    alert = raw.get("manipulation_alert", {})
-    if isinstance(alert, dict):
-        return {
-            "triggered": bool(alert.get("triggered", False)),
-            "sources": alert.get("sources", []),
-        }
-    if hasattr(alert, "triggered"):
-        return {
-            "triggered": bool(alert.triggered),
-            "sources": getattr(alert, "sources", []),
-        }
-    return {"triggered": False, "sources": []}
 
 
 # ==============================================================================
