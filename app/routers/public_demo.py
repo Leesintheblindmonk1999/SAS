@@ -136,20 +136,60 @@ def _extract_verdict(raw: dict[str, Any], isi: float) -> str:
 
 def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
     """
-    Extrae fired_modules del resultado de run_diff.
-    En detector.py fired_modules está dentro de evidence (via _build_evidence).
+    Return only modules that actually fired.
+
+    Some internal evidence fields may include diagnostic module notes for E9-E12
+    even when triggered=False. The public demo should expose only triggered
+    modules to avoid confusing users.
     """
     evidence = raw.get("evidence") if isinstance(raw.get("evidence"), dict) else {}
+
     candidates = [
-        evidence.get("fired_modules"),   # fuente primaria — _build_evidence lo pone acá
+        evidence.get("fired_modules"),
         raw.get("fired_modules"),
         evidence.get("extended_modules"),
         raw.get("extended_modules"),
+        evidence.get("module_notes"),
+        raw.get("module_notes"),
     ]
+
+    fired: list[str] = []
+
     for item in candidates:
-        if isinstance(item, list) and item:
-            return [str(x) for x in item]
-    return []
+        if not isinstance(item, list):
+            continue
+
+        for module in item:
+            if isinstance(module, str):
+                fired.append(module)
+                continue
+
+            if isinstance(module, dict):
+                triggered = bool(module.get("triggered", False))
+                if not triggered:
+                    continue
+
+                code = module.get("code")
+                name = module.get("name")
+
+                if code and name:
+                    fired.append(f"{code} {name}")
+                elif code:
+                    fired.append(str(code))
+                elif name:
+                    fired.append(str(name))
+                else:
+                    fired.append(str(module))
+
+    # Deduplicate while preserving order.
+    seen = set()
+    clean = []
+    for item in fired:
+        if item not in seen:
+            seen.add(item)
+            clean.append(item)
+
+    return clean
 
 
 def _extract_manipulation_alert(raw: dict[str, Any]) -> dict[str, Any]:
