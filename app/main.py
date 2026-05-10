@@ -17,6 +17,7 @@ Production improvements:
 - Strong root and integrity endpoints
 - Admin-only /v1/metrics endpoint
 - Public anonymized activity endpoints
+- Public demo endpoint
 """
 
 from __future__ import annotations
@@ -136,6 +137,15 @@ except ImportError:
     HAS_PUBLIC_ACTIVITY = False
     public_activity_router = None
     logger.info("Public activity router not found. Optional public activity disabled.")
+
+try:
+    from app.routers.public_demo import router as public_demo_router
+
+    HAS_PUBLIC_DEMO = True
+except ImportError:
+    HAS_PUBLIC_DEMO = False
+    public_demo_router = None
+    logger.info("Public demo router not found. Optional public demo disabled.")
 
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
@@ -339,6 +349,9 @@ if HAS_METRICS and metrics_router:
 if HAS_PUBLIC_ACTIVITY and public_activity_router:
     app.include_router(public_activity_router, tags=["Public"])
 
+if HAS_PUBLIC_DEMO and public_demo_router:
+    app.include_router(public_demo_router, tags=["Public"])
+
 if HAS_CHAT and chat_router:
     app.include_router(chat_router, tags=["Honest Chat"])
 
@@ -394,6 +407,7 @@ async def root() -> dict[str, Any]:
             "integrity": "/integrity",
             "public_stats": "/public/stats",
             "public_activity": "/public/activity",
+            "public_demo": "/public/demo/audit",
             "docs": "/docs",
         },
     }
@@ -432,6 +446,7 @@ async def readyz() -> dict[str, Any]:
             "admin": True,
             "metrics": HAS_METRICS,
             "public_activity": HAS_PUBLIC_ACTIVITY,
+            "public_demo": HAS_PUBLIC_DEMO,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
