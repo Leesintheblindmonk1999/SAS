@@ -1,19 +1,22 @@
 """
-app/routers/public_demo.py — SAS Public Demo Endpoint
-═══════════════════════════════════════════════════════
-POST /public/demo/audit — no API key required.
+app/routers/public_demo.py - SAS Public Demo Endpoint
+=====================================================
 
-Usa run_diff(text_a, text_b) — el mismo motor forense de /v1/diff.
-Source = text_a (referencia ground truth)
-Response = text_b (texto sospechoso a auditar)
+POST /public/demo/audit - no API key required.
 
-Seguridad:
-- Sin API key en frontend
-- Texto completo nunca almacenado (solo len() en logs)
-- IP hasheada antes de loggear
-- Rate limit en memoria por IP hash (sin dependencias extra)
-- Sin stack traces en respuesta
-- Max 2000 chars por campo
+Uses run_diff(text_a, text_b), the same forensic comparison engine used by /v1/diff.
+
+Source = text_a, reference / ground truth.
+Response = text_b, suspicious text to audit.
+
+Security:
+- No API key in frontend
+- Full text is never stored
+- Only input lengths are logged
+- IP is hashed before logging
+- Simple in-memory rate limit by IP hash
+- No stack traces in API responses
+- Max 2000 chars per field
 
 Registry: TAD EX-2026-18792778
 Author: Gonzalo Emir Durante
@@ -37,14 +40,15 @@ logger = logging.getLogger("sas.public_demo")
 router = APIRouter()
 
 # ==============================================================================
-# CONFIG CON FALLBACKS SEGUROS
+# SAFE CONFIG FALLBACKS
 # ==============================================================================
 
 PUBLIC_DEMO_ENABLED: bool = bool(getattr(settings, "public_demo_enabled", True))
 PUBLIC_DEMO_MAX_CHARS: int = int(getattr(settings, "public_demo_max_chars", 2000))
 PUBLIC_DEMO_LIMIT_PER_DAY: int = int(getattr(settings, "public_demo_limit_per_day", 25))
 
-# Rate limit en memoria: { ip_hash: {"count": int, "date": "YYYY-MM-DD"} }
+# In-memory rate limit:
+# { ip_hash: {"count": int, "date": "YYYY-MM-DD"} }
 _RATE: dict[str, dict[str, Any]] = {}
 
 
@@ -73,6 +77,7 @@ def _client_ip(request: Request) -> str:
 def _check_rate(ip_hash: str) -> None:
     today = _utc_day()
     entry = _RATE.get(ip_hash)
+
     if entry and entry.get("date") == today:
         if int(entry.get("count", 0)) >= PUBLIC_DEMO_LIMIT_PER_DAY:
             raise HTTPException(
@@ -82,34 +87,40 @@ def _check_rate(ip_hash: str) -> None:
                     "Get a Free API key to continue."
                 ),
             )
+
         entry["count"] = int(entry.get("count", 0)) + 1
-    else:
-        _RATE[ip_hash] = {"count": 1, "date": today}
+        return
+
+    _RATE[ip_hash] = {"count": 1, "date": today}
 
 
 def _to_dict(value: Any) -> dict[str, Any]:
     """
-    Normaliza el resultado de run_diff a dict.
-    Protege contra el caso en que el motor devuelva un objeto Pydantic
-    en vez de un diccionario plano.
+    Normalize run_diff output to a plain dict.
+
+    This protects the public demo if the internal engine returns a Pydantic model
+    or another object instead of a plain dictionary.
     """
     if isinstance(value, dict):
         return value
+
     if hasattr(value, "model_dump"):
         dumped = value.model_dump()
         return dumped if isinstance(dumped, dict) else {}
+
     if hasattr(value, "dict"):
         dumped = value.dict()
         return dumped if isinstance(dumped, dict) else {}
+
     return {}
 
 
 def _extract_isi(raw: dict[str, Any]) -> float:
     """
-    Extrae ISI del resultado de run_diff.
-    run_diff devuelve manifold_score e isi (ambos = isi_final del module_state).
+    Extract ISI from run_diff output.
     """
     evidence = raw.get("evidence") if isinstance(raw.get("evidence"), dict) else {}
+
     candidates = [
         raw.get("isi"),
         raw.get("manifold_score"),
@@ -117,19 +128,23 @@ def _extract_isi(raw: dict[str, Any]) -> float:
         evidence.get("isi_hard"),
         evidence.get("isi_tda"),
     ]
+
     for item in candidates:
         if item is not None:
             try:
                 return float(item)
             except (TypeError, ValueError):
                 continue
+
     return 0.0
 
 
 def _extract_verdict(raw: dict[str, Any], isi: float) -> str:
     verdict = raw.get("verdict")
+
     if isinstance(verdict, str) and verdict.strip():
         return verdict.strip()
+
     kappa = float(getattr(settings, "kappa_d", 0.56))
     return "MANIFOLD_RUPTURE" if isi < kappa else "COHERENT"
 
@@ -193,7 +208,10 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
 
                 if "penalty" in module:
                     try:
-                        if float(module.get("penalty", 1.0)) >= 1.0 and not bool(module.get("triggered", False)):
+                        penalty = float(module.get("penalty", 1.0))
+                        triggered = bool(module.get("triggered", False))
+
+                        if penalty >= 1.0 and not triggered:
                             continue
                     except (TypeError, ValueError):
                         pass
@@ -211,7 +229,7 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
                     fired.append(str(module))
 
     seen = set()
-    clean = []
+    clean: list[str] = []
 
     for item in fired:
         if item not in seen:
@@ -219,6 +237,46 @@ def _extract_fired_modules(raw: dict[str, Any]) -> list[str]:
             clean.append(item)
 
     return clean
+
+
+def _extract_manipulation_alert(raw: dict[str, Any]) -> dict[str, Any]:
+    """
+    Return a sanitized manipulation_alert object.
+
+    The public demo exposes only:
+    - triggered: bool
+    - sources: list[str]
+
+    Internal details are intentionally omitted.
+    """
+    alert = raw.get("manipulation_alert", {})
+
+    if isinstance(alert, dict):
+        sources = alert.get("sources", [])
+
+        if not isinstance(sources, list):
+            sources = []
+
+        return {
+            "triggered": bool(alert.get("triggered", False)),
+            "sources": [str(item) for item in sources],
+        }
+
+    if hasattr(alert, "triggered"):
+        sources = getattr(alert, "sources", [])
+
+        if not isinstance(sources, list):
+            sources = []
+
+        return {
+            "triggered": bool(getattr(alert, "triggered", False)),
+            "sources": [str(item) for item in sources],
+        }
+
+    return {
+        "triggered": False,
+        "sources": [],
+    }
 
 
 # ==============================================================================
@@ -261,14 +319,14 @@ class DemoResponse(BaseModel):
     "/public/demo/audit",
     response_model=DemoResponse,
     tags=["Public"],
-    summary="Public SAS demo audit — no API key required",
+    summary="Public SAS demo audit - no API key required",
     description=(
-        "Demo pública del motor forense SAS. Usa el mismo pipeline que /v1/diff: "
-        "TDA H0+H1 + NIG + E9-E12 con κD=0.56. "
-        "Source = texto de referencia. Response = texto a auditar. "
-        "No requiere API key. Texto completo no almacenado. "
-        f"Máx. {PUBLIC_DEMO_MAX_CHARS} chars por campo. "
-        f"Límite: {PUBLIC_DEMO_LIMIT_PER_DAY} requests/día por IP."
+        "Public demo of the SAS forensic engine. Uses the same pipeline as /v1/diff: "
+        "TDA H0+H1 + NIG + E9-E12 with kappa_D=0.56. "
+        "Source = reference text. Response = text to audit. "
+        "No API key required. Full text is not stored. "
+        f"Max {PUBLIC_DEMO_MAX_CHARS} chars per field. "
+        f"Limit: {PUBLIC_DEMO_LIMIT_PER_DAY} requests/day per IP."
     ),
 )
 async def public_demo_audit(payload: DemoRequest, request: Request) -> DemoResponse:
@@ -301,11 +359,11 @@ async def public_demo_audit(payload: DemoRequest, request: Request) -> DemoRespo
 
         raw = _to_dict(
             run_diff(
-                text_a=source,       # ground truth / referencia
-                text_b=response,     # texto sospechoso
-                experimental=True,   # activa E9-E12
+                text_a=source,
+                text_b=response,
+                experimental=True,
                 domain="generic",
-                enable_modules=None, # usa todos los configurados en settings
+                enable_modules=None,
             )
         )
 
