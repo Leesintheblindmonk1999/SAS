@@ -62,7 +62,8 @@ def _connect(path: Path | None = None) -> sqlite3.Connection:
 def hash_api_key(api_key: str | None) -> str | None:
     if not api_key:
         return None
-    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    pepper = getattr(settings, "api_key_hash_pepper", "sas-dev-pepper-change-me")
+    return hashlib.sha256(f"{api_key}:{pepper}".encode("utf-8")).hexdigest()
 
 
 def init_metrics_db() -> None:
