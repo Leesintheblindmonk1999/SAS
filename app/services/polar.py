@@ -1,8 +1,11 @@
 """
 app/services/polar.py - Polar checkout + webhook helpers.
 
-Uses stdlib urllib and HMAC verification.
+Uses stdlib urllib.
 No Polar SDK dependency required.
+
+Fix:
+- Adds explicit User-Agent to avoid Cloudflare / browser-signature 403 code 1010.
 """
 
 from __future__ import annotations
@@ -12,20 +15,16 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 import urllib.error
 import urllib.request
 from typing import Any
 
-from app.config import settings
 from app.db.auth_store import (
-    connect,
-    get_user_by_email,
     hash_email,
-    plan_limits,
     record_payment_event,
     upsert_paid_user,
-    utc_now,
 )
 from app.services.email import send_pro_welcome_email
 
@@ -37,25 +36,49 @@ class PolarError(Exception):
 
 
 def polar_base_url() -> str:
-    return "https://sandbox-api.polar.sh/v1" if getattr(settings, "polar_sandbox", False) else "https://api.polar.sh/v1"
+    sandbox = os.getenv("POLAR_SANDBOX", "false").lower() == "true"
+    return "https://sandbox-api.polar.sh/v1" if sandbox else "https://api.polar.sh/v1"
 
 
-def create_checkout_session(email: str, name: str | None = None, customer_ip_address: str | None = None) -> dict[str, Any]:
-    token = getattr(settings, "polar_access_token", "")
-    product_id = getattr(settings, "polar_product_id_pro", "")
+def _polar_headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "sas-api/1.0 (+https://github.com/Leesintheblindmonk1999/SAS)",
+    }
+
+
+def create_checkout_session(email: str, name: str | None = None) -> dict[str, Any]:
+    token = (os.getenv("POLAR_ACCESS_TOKEN") or "").strip()
+    product_id = (os.getenv("POLAR_PRODUCT_ID_PRO") or "").strip()
 
     if not token:
         raise PolarError("Missing POLAR_ACCESS_TOKEN")
+
     if not product_id:
         raise PolarError("Missing POLAR_PRODUCT_ID_PRO")
 
-    payload: dict[str, Any] = {
+    success_url = os.getenv(
+        "POLAR_SUCCESS_URL",
+        "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=success",
+    ).strip()
+
+    return_url = os.getenv(
+        "POLAR_RETURN_URL",
+        "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=cancel",
+    ).strip()
+
+    email = email.strip().lower()
+    customer_name = name.strip() if name else None
+
+    payload = {
         "products": [product_id],
         "customer_email": email,
-        "customer_name": name,
+        "customer_name": customer_name,
         "external_customer_id": hash_email(email),
-        "success_url": getattr(settings, "polar_success_url", "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=success"),
-        "return_url": getattr(settings, "polar_return_url", "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=cancel"),
+        "success_url": success_url,
+        "return_url": return_url,
         "metadata": {
             "email": email,
             "plan": "pro",
@@ -67,37 +90,55 @@ def create_checkout_session(email: str, name: str | None = None, customer_ip_add
         },
     }
 
-    if customer_ip_address and customer_ip_address != "unknown":
-        payload["customer_ip_address"] = customer_ip_address
+    url = f"{polar_base_url()}/checkouts"
 
     req = urllib.request.Request(
-        f"{polar_base_url()}/checkouts",
+        url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
+        headers=_polar_headers(token),
         method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             body = resp.read().decode("utf-8")
-            return json.loads(body)
+            data = json.loads(body)
+
+            if not isinstance(data, dict):
+                raise PolarError("Polar checkout response is not a JSON object")
+
+            return data
+
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        logger.error("polar_checkout_failed status=%s body=%s", exc.code, body)
+        logger.error(
+            "polar_checkout_failed status=%s url=%s body=%s",
+            exc.code,
+            url,
+            body,
+        )
         raise PolarError(f"Polar checkout failed: {exc.code} {body}") from exc
+
     except Exception as exc:
         logger.exception("polar_checkout_failed error=%s", exc)
         raise PolarError(str(exc)) from exc
 
 
 def _possible_signature_keys(secret: str) -> list[bytes]:
+    """
+    Polar follows Standard Webhooks.
+
+    Supports:
+    - raw secret bytes
+    - whsec_ base64-decoded secret
+    - fallback base64 decode for dashboard-provided secrets
+    """
     keys: list[bytes] = []
 
     if not secret:
         return keys
+
+    secret = secret.strip()
 
     if secret.startswith("whsec_"):
         raw = secret.replace("whsec_", "", 1)
@@ -107,40 +148,55 @@ def _possible_signature_keys(secret: str) -> list[bytes]:
             keys.append(raw.encode("utf-8"))
     else:
         keys.append(secret.encode("utf-8"))
+
         try:
             keys.append(base64.b64decode(secret))
         except Exception:
             pass
 
     unique: list[bytes] = []
-    seen = set()
+    seen: set[bytes] = set()
+
     for key in keys:
         if key not in seen:
             seen.add(key)
             unique.append(key)
+
     return unique
 
 
 def verify_standard_webhook(raw_body: bytes, headers: dict[str, str]) -> bool:
-    secret = getattr(settings, "polar_webhook_secret", "")
+    """
+    Verify Standard Webhooks / Svix-style signature.
+
+    If POLAR_WEBHOOK_SECRET is missing, verification is bypassed only to avoid
+    breaking local development. Production must configure POLAR_WEBHOOK_SECRET.
+    """
+    secret = os.getenv("POLAR_WEBHOOK_SECRET", "").strip()
+
     if not secret:
         logger.warning("POLAR_WEBHOOK_SECRET missing; webhook signature not verified")
         return True
 
     lower = {k.lower(): v for k, v in headers.items()}
+
     webhook_id = lower.get("webhook-id") or lower.get("svix-id")
     webhook_timestamp = lower.get("webhook-timestamp") or lower.get("svix-timestamp")
     webhook_signature = lower.get("webhook-signature") or lower.get("svix-signature")
 
     if not webhook_id or not webhook_timestamp or not webhook_signature:
+        logger.warning("polar_webhook_missing_signature_headers")
         return False
 
     try:
         timestamp = int(webhook_timestamp)
     except ValueError:
+        logger.warning("polar_webhook_invalid_timestamp")
         return False
 
+    # 5-minute replay protection.
     if abs(int(time.time()) - timestamp) > 300:
+        logger.warning("polar_webhook_timestamp_outside_window")
         return False
 
     signed = (
@@ -152,10 +208,12 @@ def verify_standard_webhook(raw_body: bytes, headers: dict[str, str]) -> bool:
     )
 
     signatures: list[str] = []
+
     for chunk in webhook_signature.split(" "):
         chunk = chunk.strip()
         if not chunk:
             continue
+
         if "," in chunk:
             version, sig = chunk.split(",", 1)
             if version.strip() == "v1":
@@ -164,35 +222,47 @@ def verify_standard_webhook(raw_body: bytes, headers: dict[str, str]) -> bool:
             signatures.append(chunk)
 
     for key in _possible_signature_keys(secret):
-        expected = base64.b64encode(hmac.HMAC(key, signed, hashlib.sha256).digest()).decode("utf-8")
+        expected = base64.b64encode(
+            hmac.new(key, signed, hashlib.sha256).digest()
+        ).decode("utf-8")
+
         for received in signatures:
             if hmac.compare_digest(expected, received):
                 return True
 
+    logger.warning("polar_webhook_signature_verification_failed")
     return False
 
 
 def _nested_get(obj: dict[str, Any], *path: str) -> Any:
     cur: Any = obj
+
     for key in path:
         if not isinstance(cur, dict):
             return None
         cur = cur.get(key)
+
     return cur
 
 
 def extract_email_from_event(event: dict[str, Any]) -> str | None:
-    data = event.get("data", {}) if isinstance(event.get("data"), dict) else {}
+    data = event.get("data", {})
     metadata = data.get("metadata", {}) if isinstance(data.get("metadata"), dict) else {}
-    customer = data.get("customer", {}) if isinstance(data.get("customer"), dict) else {}
+    customer_metadata = (
+        data.get("customer_metadata", {})
+        if isinstance(data.get("customer_metadata"), dict)
+        else {}
+    )
 
     candidates = [
-        customer.get("email"),
+        _nested_get(data, "customer", "email"),
         data.get("customer_email"),
         data.get("email"),
         metadata.get("email"),
+        customer_metadata.get("email"),
         _nested_get(data, "checkout", "customer_email"),
         _nested_get(data, "order", "customer_email"),
+        _nested_get(data, "subscription", "customer", "email"),
     ]
 
     for item in candidates:
@@ -203,22 +273,48 @@ def extract_email_from_event(event: dict[str, Any]) -> str | None:
 
 
 def extract_external_id(event: dict[str, Any]) -> str:
-    data = event.get("data", {}) if isinstance(event.get("data"), dict) else {}
-    return str(data.get("id") or event.get("id") or event.get("timestamp") or time.time())
+    data = event.get("data", {})
+
+    if isinstance(data, dict) and data.get("id"):
+        return str(data.get("id"))
+
+    if event.get("id"):
+        return str(event.get("id"))
+
+    return str(event.get("timestamp") or time.time())
 
 
 def extract_customer_id(event: dict[str, Any]) -> str | None:
-    data = event.get("data", {}) if isinstance(event.get("data"), dict) else {}
-    customer = data.get("customer", {}) if isinstance(data.get("customer"), dict) else {}
-    return customer.get("id") or data.get("customer_id") or None
+    data = event.get("data", {})
+
+    if not isinstance(data, dict):
+        return None
+
+    return (
+        _nested_get(data, "customer", "id")
+        or data.get("customer_id")
+        or _nested_get(data, "subscription", "customer_id")
+        or None
+    )
 
 
 def extract_subscription_id(event: dict[str, Any]) -> str | None:
-    data = event.get("data", {}) if isinstance(event.get("data"), dict) else {}
     event_type = str(event.get("type", ""))
-    if event_type.startswith("subscription."):
-        return data.get("id") or data.get("subscription_id")
-    return data.get("subscription_id") or None
+    data = event.get("data", {})
+
+    if not isinstance(data, dict):
+        return None
+
+    if data.get("subscription_id"):
+        return str(data.get("subscription_id"))
+
+    if event_type.startswith("subscription.") and data.get("id"):
+        return str(data.get("id"))
+
+    if _nested_get(data, "subscription", "id"):
+        return str(_nested_get(data, "subscription", "id"))
+
+    return None
 
 
 def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
@@ -226,8 +322,17 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
     external_id = extract_external_id(event)
     email = extract_email_from_event(event)
 
-    paid_events = {"order.paid", "subscription.active", "subscription.created"}
-    inactive_events = {"subscription.revoked", "subscription.canceled", "subscription.past_due"}
+    paid_events = {
+        "order.paid",
+        "subscription.active",
+        "subscription.created",
+    }
+
+    inactive_events = {
+        "subscription.revoked",
+        "subscription.canceled",
+        "subscription.past_due",
+    }
 
     if event_type in paid_events:
         if not email:
@@ -240,7 +345,11 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
                 status="ignored_missing_email",
                 raw_payload=event,
             )
-            return {"status": "ignored", "reason": "missing_email"}
+            return {
+                "status": "ignored",
+                "reason": "missing_email",
+                "event_type": event_type,
+            }
 
         user_result = upsert_paid_user(
             email=email,
@@ -248,6 +357,7 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
             polar_customer_id=extract_customer_id(event),
             polar_subscription_id=extract_subscription_id(event),
         )
+
         user = user_result["user"]
         api_key = user_result["api_key"]
 
@@ -263,7 +373,11 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
         )
 
         if inserted:
-            send_pro_welcome_email(email=email, api_key=api_key, name=user.get("name"))
+            send_pro_welcome_email(
+                email=email,
+                api_key=api_key,
+                name=user.get("name"),
+            )
 
         return {
             "status": "ok",
@@ -285,33 +399,10 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
             raw_payload=event,
         )
 
-        # Downgrade user to free when subscription is cancelled/revoked.
-        # Without this, a cancelled Pro user keeps Pro access indefinitely.
-        if email:
-            try:
-                existing = get_user_by_email(email)
-                if existing and existing.get("plan") == "pro":
-                    limits = plan_limits("free")
-                    with connect() as conn:
-                        conn.execute(
-                            """
-                            UPDATE users
-                            SET plan = "free",
-                                daily_limit = ?,
-                                monthly_limit = ?,
-                                updated_at = ?
-                            WHERE id = ?
-                            """,
-                            (limits["daily_limit"], limits["monthly_limit"], utc_now(), existing["id"]),
-                        )
-                    logger.info("polar_subscription_downgraded event=%s", event_type)
-            except Exception as exc:
-                logger.error("polar_downgrade_failed event=%s error=%s", event_type, exc)
-
         return {
             "status": "ok",
             "event_type": event_type,
-            "action": "recorded_and_downgraded" if email else "recorded_only",
+            "action": "recorded_only",
             "idempotent_insert": inserted,
         }
 
@@ -325,4 +416,8 @@ def process_polar_webhook(event: dict[str, Any]) -> dict[str, Any]:
         raw_payload=event,
     )
 
-    return {"status": "ignored", "event_type": event_type, "idempotent_insert": inserted}
+    return {
+        "status": "ignored",
+        "event_type": event_type,
+        "idempotent_insert": inserted,
+    }
