@@ -18,6 +18,9 @@ Production improvements:
 - Admin-only /v1/metrics endpoint
 - Public anonymized activity endpoints
 - Public demo endpoint
+- Self-service Free API keys
+- Plan-aware API key authentication
+- Polar checkout/webhook skeleton
 """
 
 from __future__ import annotations
@@ -34,6 +37,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.db.auth_store import init_auth_db
+from app.services.auth import api_key_auth_middleware
 from app.services.metrics_store import (
     init_metrics_db,
     purge_old_metrics,
@@ -146,6 +151,33 @@ except ImportError:
     HAS_PUBLIC_DEMO = False
     public_demo_router = None
     logger.info("Public demo router not found. Optional public demo disabled.")
+
+try:
+    from app.routers.public_request_key import router as public_request_key_router
+
+    HAS_PUBLIC_REQUEST_KEY = True
+except ImportError:
+    HAS_PUBLIC_REQUEST_KEY = False
+    public_request_key_router = None
+    logger.info("Public request-key router not found. Optional self-service keys disabled.")
+
+try:
+    from app.routers.whoami import router as whoami_router
+
+    HAS_WHOAMI = True
+except ImportError:
+    HAS_WHOAMI = False
+    whoami_router = None
+    logger.info("Whoami router not found. Optional API identity disabled.")
+
+try:
+    from app.routers.billing import router as billing_router
+
+    HAS_BILLING = True
+except ImportError:
+    HAS_BILLING = False
+    billing_router = None
+    logger.info("Billing router not found. Optional billing disabled.")
 
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
@@ -315,13 +347,15 @@ app = FastAPI(
 
 
 @app.on_event("startup")
-async def startup_metrics():
+async def startup_databases():
     init_metrics_db()
+    init_auth_db()
     deleted = purge_old_metrics()
     if deleted:
         logger.info("metrics_retention deleted_rows=%s", deleted)
 
 
+app.middleware("http")(api_key_auth_middleware)
 app.middleware("http")(request_monitoring_middleware)
 
 if HAS_SECURITY and SecurityHeadersMiddleware:
@@ -351,6 +385,15 @@ if HAS_PUBLIC_ACTIVITY and public_activity_router:
 
 if HAS_PUBLIC_DEMO and public_demo_router:
     app.include_router(public_demo_router, tags=["Public"])
+
+if HAS_PUBLIC_REQUEST_KEY and public_request_key_router:
+    app.include_router(public_request_key_router, tags=["Public"])
+
+if HAS_WHOAMI and whoami_router:
+    app.include_router(whoami_router, prefix="/v1", tags=["Auth"])
+
+if HAS_BILLING and billing_router:
+    app.include_router(billing_router, tags=["Billing"])
 
 if HAS_CHAT and chat_router:
     app.include_router(chat_router, tags=["Honest Chat"])
@@ -408,6 +451,9 @@ async def root() -> dict[str, Any]:
             "public_stats": "/public/stats",
             "public_activity": "/public/activity",
             "public_demo": "/public/demo/audit",
+            "request_key": "/public/request-key",
+            "whoami": "/v1/whoami",
+            "polar_checkout": "/billing/polar/checkout",
             "docs": "/docs",
         },
     }
@@ -447,6 +493,9 @@ async def readyz() -> dict[str, Any]:
             "metrics": HAS_METRICS,
             "public_activity": HAS_PUBLIC_ACTIVITY,
             "public_demo": HAS_PUBLIC_DEMO,
+            "public_request_key": HAS_PUBLIC_REQUEST_KEY,
+            "whoami": HAS_WHOAMI,
+            "billing": HAS_BILLING,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
