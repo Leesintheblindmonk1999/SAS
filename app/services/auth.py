@@ -1,93 +1,142 @@
-import hashlib
-import secrets
-import sqlite3
-from pathlib import Path
-from contextlib import contextmanager
+"""
+app/services/auth.py - SAS API key authentication.
 
-DB_PATH = Path(__file__).parent.parent / "auth.db"
+This file replaces the older simple auth module while preserving compatibility
+with existing imports:
+- init_auth_db()
+- validate_api_key(api_key)
+- verify_api_key(api_key)
+- create_new_user(is_premium=False)
 
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+It also provides:
+- api_key_auth_middleware
+- get_current_user
+"""
 
-def init_auth_db():
-    """Inicializa la base de datos de autenticación - llamar al inicio"""
-    with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                api_key_hash TEXT UNIQUE NOT NULL,
-                is_premium BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_used TIMESTAMP
-            )
-        """)
-        conn.commit()
-        
-        # Crear API key por defecto para pruebas (solo si la tabla está vacía)
-        cursor = conn.execute("SELECT COUNT(*) as count FROM users")
-        if cursor.fetchone()["count"] == 0:
-            default_key = "sas_test_key_2026"
-            key_hash = hashlib.sha256(default_key.encode()).hexdigest()
-            conn.execute(
-                "INSERT INTO users (api_key_hash, is_premium) VALUES (?, ?)",
-                (key_hash, 1)
-            )
-            conn.commit()
-            print(f"✅ Base de datos inicializada. API key por defecto: {default_key}")
+from __future__ import annotations
 
-def hash_api_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+from typing import Any
 
-def generate_api_key() -> str:
-    return f"sas_{secrets.token_urlsafe(32)}"
+from fastapi import Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-def create_new_user(is_premium: bool = False) -> str:
-    """Genera una nueva API key y la guarda en DB. Retorna la key en texto plano."""
-    init_auth_db()
-    raw_key = generate_api_key()
-    key_hash = hash_api_key(raw_key)
-    
-    with get_db() as conn:
-        conn.execute(
-            "INSERT INTO users (api_key_hash, is_premium) VALUES (?, ?)",
-            (key_hash, 1 if is_premium else 0)
-        )
-        conn.commit()
-    
-    return raw_key
+from app.db.auth_store import (
+    create_admin_key,
+    get_user_by_api_key,
+    init_auth_db,
+    quota_state,
+    record_api_usage,
+)
+
+
+PROTECTED_PREFIXES = (
+    "/v1/audit",
+    "/v1/diff",
+    "/v1/chat",
+    "/v1/audit_conversation",
+    "/v1/whoami",
+)
+
+
+def _is_protected_path(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_PREFIXES)
+
+
+def _api_key_from_request(request: Request) -> str | None:
+    auth = request.headers.get("Authorization", "").strip()
+    bearer = auth.replace("Bearer ", "", 1).strip() if auth.lower().startswith("bearer ") else ""
+    return request.headers.get("X-API-Key") or request.headers.get("x-api-key") or bearer or None
+
 
 def validate_api_key(api_key: str) -> tuple[bool, int | None]:
-    """Valida una API key. Retorna (es_válida, user_id)"""
-    if not api_key or len(api_key) < 5:
+    """Compatibility function used by existing dependencies.py."""
+    user = get_user_by_api_key(api_key)
+    if not user:
         return False, None
-    
-    key_hash = hash_api_key(api_key)
-    
-    with get_db() as conn:
-        cursor = conn.execute(
-            "SELECT id, is_premium FROM users WHERE api_key_hash = ?",
-            (key_hash,)
-        )
-        user = cursor.fetchone()
-        
-        if user:
-            # Actualizar last_used
-            conn.execute(
-                "UPDATE users SET last_used = CURRENT_TIMESTAMP WHERE id = ?",
-                (user["id"],)
-            )
-            conn.commit()
-            return True, user["id"]
-    
-    return False, None
+    if user.get("status") != "active":
+        return False, None
+    return True, int(user["id"]) if user.get("id") else None
+
 
 def verify_api_key(api_key: str) -> bool:
-    """Return True if the API key exists in the auth DB, False otherwise."""
-    is_valid, _ = validate_api_key(api_key)
-    return is_valid
+    """Compatibility function used by old code."""
+    ok, _ = validate_api_key(api_key)
+    return ok
+
+
+def create_new_user(is_premium: bool = False) -> str:
+    """Compatibility function used by /admin/generate-key."""
+    init_auth_db()
+    return create_admin_key(is_premium=is_premium)
+
+
+def verify_api_key_value(api_key: str | None) -> dict[str, Any]:
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+
+    user = get_user_by_api_key(api_key)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    if user.get("status") != "active":
+        raise HTTPException(status_code=403, detail="API key is not active")
+
+    return user
+
+
+async def get_current_user(
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> dict[str, Any]:
+    existing = getattr(request.state, "api_user", None)
+    if existing:
+        return existing
+    return verify_api_key_value(x_api_key)
+
+
+async def api_key_auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if not _is_protected_path(path):
+        return await call_next(request)
+
+    try:
+        api_key = _api_key_from_request(request)
+        user = verify_api_key_value(api_key)
+        state = quota_state(user)
+
+        if not state["allowed"]:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "quota_exceeded",
+                    "reason": state["reason"],
+                    "plan": user.get("plan"),
+                    "daily_used": state["daily_used"],
+                    "daily_limit": state["daily_limit"],
+                    "monthly_used": state["monthly_used"],
+                    "monthly_limit": state["monthly_limit"],
+                },
+            )
+
+        request.state.api_user = user
+        request.state.api_quota = state
+
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    response = await call_next(request)
+
+    try:
+        record_api_usage(
+            user=user,
+            method=request.method,
+            path=path,
+            status_code=response.status_code,
+            request_id=getattr(request.state, "request_id", None),
+        )
+    except Exception:
+        # Usage logging must never break the request.
+        pass
+
+    return response
