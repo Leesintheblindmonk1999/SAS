@@ -90,7 +90,7 @@ def create_checkout_session(email: str, name: str | None = None) -> dict[str, An
         },
     }
 
-    url = f"{polar_base_url()}/checkouts"
+    url = f"{polar_base_url()}/checkouts/"
 
     req = urllib.request.Request(
         url,
