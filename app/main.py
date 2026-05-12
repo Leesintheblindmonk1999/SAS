@@ -20,7 +20,8 @@ Production improvements:
 - Public demo endpoint
 - Self-service Free API keys
 - Plan-aware API key authentication
-- Polar checkout/webhook skeleton
+- Polar checkout/webhook
+- Mercado Pago Checkout Pro + webhook
 """
 
 from __future__ import annotations
@@ -177,7 +178,16 @@ try:
 except ImportError:
     HAS_BILLING = False
     billing_router = None
-    logger.info("Billing router not found. Optional billing disabled.")
+    logger.info("Billing router not found. Optional Polar billing disabled.")
+
+try:
+    from app.routers.mercadopago_billing import router as mercadopago_billing_router
+
+    HAS_MERCADOPAGO_BILLING = True
+except ImportError:
+    HAS_MERCADOPAGO_BILLING = False
+    mercadopago_billing_router = None
+    logger.info("Mercado Pago billing router not found. Optional Mercado Pago billing disabled.")
 
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
@@ -395,6 +405,9 @@ if HAS_WHOAMI and whoami_router:
 if HAS_BILLING and billing_router:
     app.include_router(billing_router, tags=["Billing"])
 
+if HAS_MERCADOPAGO_BILLING and mercadopago_billing_router:
+    app.include_router(mercadopago_billing_router, tags=["Billing"])
+
 if HAS_CHAT and chat_router:
     app.include_router(chat_router, tags=["Honest Chat"])
 
@@ -409,7 +422,6 @@ if HAS_EXTERNAL_AUDIT and external_audit_router:
 
 if HAS_NOTARIZATION and notarization_router:
     app.include_router(notarization_router, tags=["Notarization"])
-
 
 # ==============================================================================
 # PUBLIC SYSTEM ENDPOINTS
@@ -454,6 +466,9 @@ async def root() -> dict[str, Any]:
             "request_key": "/public/request-key",
             "whoami": "/v1/whoami",
             "polar_checkout": "/billing/polar/checkout",
+            "polar_webhook": "/billing/polar/webhook",
+            "mercadopago_checkout": "/billing/mercadopago/checkout",
+            "mercadopago_webhook": "/billing/mercadopago/webhook",
             "docs": "/docs",
         },
     }
@@ -496,6 +511,7 @@ async def readyz() -> dict[str, Any]:
             "public_request_key": HAS_PUBLIC_REQUEST_KEY,
             "whoami": HAS_WHOAMI,
             "billing": HAS_BILLING,
+            "mercadopago_billing": HAS_MERCADOPAGO_BILLING,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
