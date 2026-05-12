@@ -1,15 +1,14 @@
 name: SAS API Smoke Test
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    # Runs every 6 hours to monitor production availability
-    - cron: '0 */6 * * *'
   workflow_dispatch:
-    # Allows manual trigger from GitHub Actions tab
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/**"
+      - "requirements.txt"
 
 jobs:
   smoke-test:
@@ -17,71 +16,161 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
+    env:
+      SAS_BASE_URL: https://sas-api.onrender.com
+      SAS_API_KEY: ${{ secrets.SAS_SMOKE_API_KEY }}
+
     steps:
-      - name: Check /health endpoint
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show target
         run: |
-          echo "Testing https://sas-api.onrender.com/health ..."
-          response=$(curl --silent --write-out "\n%{http_code}" \
-            --max-time 30 \
-            https://sas-api.onrender.com/health)
+          echo "Testing SAS API at: $SAS_BASE_URL"
 
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
-
-          echo "Status: $http_code"
-          echo "Body: $body"
-
-          if [ "$http_code" != "200" ]; then
-            echo "FAIL: /health returned $http_code (expected 200)"
-            exit 1
-          fi
-
-          echo "PASS: /health is up"
-
-      - name: Check /v1/diff endpoint
+      - name: Wait for API to wake up
         run: |
-          echo "Testing https://sas-api.onrender.com/v1/diff ..."
-          response=$(curl --silent --write-out "\n%{http_code}" \
-            --max-time 30 \
-            -X POST https://sas-api.onrender.com/v1/diff \
+          set -e
+
+          echo "Waking up API..."
+          for i in $(seq 1 12); do
+            code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$SAS_BASE_URL/health" || true)
+
+            echo "Attempt $i -> HTTP $code"
+
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              echo ""
+              echo "API is awake."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "API did not become healthy in time."
+          cat /tmp/health.json || true
+          exit 1
+
+      - name: Check /health
+        run: |
+          set -e
+
+          response=$(curl -sS "$SAS_BASE_URL/health")
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          kappa=$(echo "$response" | jq -r '.kappa_d')
+
+          test "$status" = "ok"
+          test "$kappa" != "null"
+
+      - name: Check /readyz
+        run: |
+          set -e
+
+          response=$(curl -sS "$SAS_BASE_URL/readyz")
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          test "$status" = "ready"
+
+          echo "$response" | jq -e '.routers.public_demo == true'
+          echo "$response" | jq -e '.routers.public_request_key == true'
+          echo "$response" | jq -e '.routers.whoami == true'
+          echo "$response" | jq -e '.routers.billing == true'
+          echo "$response" | jq -e '.routers.diff == true'
+          echo "$response" | jq -e '.routers.audit == true'
+
+      - name: Check public stats
+        run: |
+          set -e
+
+          response=$(curl -sS "$SAS_BASE_URL/public/stats")
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          test "$status" = "ok"
+
+          echo "$response" | jq -e '.privacy.raw_ips_exposed == false'
+          echo "$response" | jq -e '.privacy.api_keys_exposed == false'
+
+      - name: Check public activity
+        run: |
+          set -e
+
+          response=$(curl -sS "$SAS_BASE_URL/public/activity?limit=5")
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          test "$status" = "ok"
+
+      - name: Check public demo endpoint
+        run: |
+          set -e
+
+          payload='{
+            "source": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
+            "response": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+          }'
+
+          response=$(curl -sS -X POST "$SAS_BASE_URL/public/demo/audit" \
             -H "Content-Type: application/json" \
-            -H "X-API-Key: ${{ secrets.SAS_SMOKE_API_KEY }}" \
-            -d '{
-              "text_a": "The Earth orbits the Sun.",
-              "text_b": "The Earth does not orbit the Sun.",
-              "experimental": false
-            }')
+            -d "$payload")
 
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
+          echo "$response" | jq .
 
-          echo "Status: $http_code"
-          echo "Body: $body"
+          status=$(echo "$response" | jq -r '.status')
+          isi=$(echo "$response" | jq -r '.isi')
+          verdict=$(echo "$response" | jq -r '.verdict')
 
-          if [ "$http_code" != "200" ]; then
-            echo "FAIL: /v1/diff returned $http_code (expected 200)"
-            exit 1
-          fi
+          test "$status" = "ok"
+          test "$isi" != "null"
+          test "$verdict" != "null"
 
-          # Verify verdict is present in response
-          if echo "$body" | grep -q '"verdict"'; then
-            echo "PASS: /v1/diff responded with verdict"
-          else
-            echo "FAIL: /v1/diff response missing 'verdict' field"
-            exit 1
-          fi
-
-          # Verify ISI is present
-          if echo "$body" | grep -q '"isi"'; then
-            echo "PASS: /v1/diff responded with ISI"
-          else
-            echo "FAIL: /v1/diff response missing 'isi' field"
-            exit 1
-          fi
-
-      - name: Summary
-        if: success()
+      - name: Check protected /v1/whoami
+        if: env.SAS_API_KEY != ''
         run: |
-          echo "✓ SAS API is operational"
-          echo "✓ /health → 200 OK"
-          echo "✓ /v1/diff → 200 OK with verdict and ISI"
+          set -e
+
+          response=$(curl -sS "$SAS_BASE_URL/v1/whoami" \
+            -H "X-API-Key: $SAS_API_KEY")
+
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          active=$(echo "$response" | jq -r '.active')
+          plan=$(echo "$response" | jq -r '.plan')
+
+          test "$status" = "ok"
+          test "$active" = "true"
+          test "$plan" != "null"
+
+      - name: Check protected /v1/diff
+        if: env.SAS_API_KEY != ''
+        run: |
+          set -e
+
+          payload='{
+            "text_a": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
+            "text_b": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950.",
+            "experimental": true
+          }'
+
+          response=$(curl -sS -X POST "$SAS_BASE_URL/v1/diff" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $SAS_API_KEY" \
+            -d "$payload")
+
+          echo "$response" | jq .
+
+          isi=$(echo "$response" | jq -r '.isi')
+          verdict=$(echo "$response" | jq -r '.verdict')
+
+          test "$isi" != "null"
+          test "$verdict" != "null"
+
+      - name: Warn if SAS_API_KEY is missing
+        if: env.SAS_API_KEY == ''
+        run: |
+          echo "::warning::SAS_API_KEY secret is missing. Protected endpoint checks were skipped."
