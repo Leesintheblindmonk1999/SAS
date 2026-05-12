@@ -17,19 +17,19 @@
 <!-- SAS-LIVE-METRICS:START -->
 ## Live Operational Snapshot / Estado Operativo Vivo
 
-_Last automated update / Última actualización automática:_ `2026-05-12T02:29:20+00:00`
+_Last automated update / Última actualización automática:_ `2026-05-12T08:31:32+00:00`
 
 ### English
 
 | Signal | Value |
 |---|---:|
-| API product requests, last 24h | `30` |
-| Successful requests, last 24h | `29` |
+| API product requests, last 24h | `11` |
+| Successful requests, last 24h | `10` |
 | 4xx errors, last 24h | `1` |
 | 5xx errors, last 24h | `0` |
-| Unique anonymized users, last 24h | `2` |
-| API product requests, last 7d | `30` |
-| Detected country buckets | `AR=29, unknown=1` |
+| Unique anonymized users, last 24h | `3` |
+| API product requests, last 7d | `11` |
+| Detected country buckets | `AR=9, unknown=1, US=1` |
 | Monitoring signal | `normal_public_activity` |
 | Repository clones | `unavailable` |
 | Unique cloners | `unavailable` |
@@ -38,13 +38,13 @@ _Last automated update / Última actualización automática:_ `2026-05-12T02:29:
 
 | Señal | Valor |
 |---|---:|
-| Requests de producto, últimas 24h | `30` |
-| Requests exitosas, últimas 24h | `29` |
+| Requests de producto, últimas 24h | `11` |
+| Requests exitosas, últimas 24h | `10` |
 | Errores 4xx, últimas 24h | `1` |
 | Errores 5xx, últimas 24h | `0` |
-| Usuarios anonimizados únicos, últimas 24h | `2` |
-| Requests de producto, últimos 7d | `30` |
-| Países detectados | `AR=29, unknown=1` |
+| Usuarios anonimizados únicos, últimas 24h | `3` |
+| Requests de producto, últimos 7d | `11` |
+| Países detectados | `AR=9, unknown=1, US=1` |
 | Señal de monitoreo | `normal_public_activity` |
 | Clones del repositorio | `unavailable` |
 | Clonadores únicos | `unavailable` |
