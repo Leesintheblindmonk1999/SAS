@@ -45,7 +45,11 @@ class Settings(BaseSettings):
     # ========================================================================
     # Rate Limiting
     # ========================================================================
-    free_requests_per_day: int = 100
+    free_requests_per_day: int = 50
+    pro_requests_per_month: int = 10000
+    team_requests_per_month: int = 50000
+    api_key_hash_pepper: str = "sas-dev-pepper-change-me"
+    legacy_bootstrap_api_key: str = "sas_test_key_2026"
 
     # ========================================================================
     # Ollama / local LLM backend for /v1/chat
@@ -94,6 +98,24 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     smtp_use_tls: bool = True
     alert_email_to: str = "duranteg2@gmail.com"
+
+    # ========================================================================
+    # Public onboarding email delivery
+    # ========================================================================
+    email_from: str = ""
+    resend_api_key: str = ""
+    sas_api_url: str = "https://sas-api.onrender.com"
+    sas_public_url: str = "https://leesintheblindmonk1999.github.io/sas-landing/"
+
+    # ========================================================================
+    # Polar billing
+    # ========================================================================
+    polar_sandbox: bool = False
+    polar_access_token: str = ""
+    polar_product_id_pro: str = ""
+    polar_webhook_secret: str = ""
+    polar_success_url: str = "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=success"
+    polar_return_url: str = "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=cancel"
     
     # ========================================================================
     # SAS Identity / Metadata
