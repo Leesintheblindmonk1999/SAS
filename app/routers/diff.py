@@ -4,7 +4,7 @@ Two-document semantic diff endpoint — the primary forensic endpoint.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from app.models.request import DiffRequest
-from app.models.response import DiffResponse, EvidenceBlock
+from app.models.response import DiffResponse, EvidenceBlock, ManipulationAlert
 from app.services.detector import run_diff
 from app.dependencies import get_api_key
 
@@ -27,7 +27,6 @@ def _to_diff_response(raw: dict) -> DiffResponse:
         manipulation_alert = {"triggered": False, "sources": [], "details": {}}
     
     # Convertir manipulation_alert a un objeto ManipulationAlert si es necesario
-    from app.models.response import ManipulationAlert
     if isinstance(manipulation_alert, dict):
         manipulation_alert = ManipulationAlert.from_dict(manipulation_alert)
     
