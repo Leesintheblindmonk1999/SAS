@@ -4,7 +4,7 @@ Single-document structural audit endpoint.
 """
 from fastapi import APIRouter, Depends
 from app.models.request import AuditRequest
-from app.models.response import AuditResponse, EvidenceBlock
+from app.models.response import AuditResponse, EvidenceBlock, ManipulationAlert
 from app.services.detector import run_audit
 from app.dependencies import get_api_key
 
@@ -13,11 +13,18 @@ router = APIRouter()
 
 def _to_audit_response(raw: dict) -> AuditResponse:
     ev = raw.get("evidence", {})
+    if not isinstance(ev, dict):
+        ev = {}
+
+    manipulation_alert = raw.get("manipulation_alert", {})
+    if not isinstance(manipulation_alert, dict):
+        manipulation_alert = {"triggered": bool(manipulation_alert), "sources": [], "details": {}}
+
     return AuditResponse(
-        manifold_score=raw.get("manifold_score", 0.0),
+        manifold_score=raw.get("manifold_score", raw.get("isi", 0.0)),
         verdict=raw.get("verdict", "ERROR"),
         confidence=raw.get("confidence", 0.0),
-        manipulation_alert=raw.get("manipulation_alert", False),
+        manipulation_alert=ManipulationAlert.from_dict(manipulation_alert),
         evidence=EvidenceBlock(**ev),
         latency_ms=raw.get("latency_ms"),
     )
