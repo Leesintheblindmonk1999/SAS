@@ -43,13 +43,24 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./omni_scanner.db"
 
     # ========================================================================
-    # Rate Limiting
+    # Rate Limiting / Plans
     # ========================================================================
     free_requests_per_day: int = 50
     pro_requests_per_month: int = 10000
     team_requests_per_month: int = 50000
+
+    # API key hashing
     api_key_hash_pepper: str = "sas-dev-pepper-change-me"
+
+    # Shared legacy key kept only for smoke tests / old examples.
+    # This key must NOT be treated as a normal production key.
     legacy_bootstrap_api_key: str = "sas_test_key_2026"
+    legacy_requests_per_day: int = 5
+    legacy_deprecation_message: str = (
+        "This shared legacy key is limited to 5 requests/day. "
+        "Request a personal free API key at "
+        "https://sas-api.onrender.com/public/request-key"
+    )
 
     # ========================================================================
     # Ollama / local LLM backend for /v1/chat
@@ -82,7 +93,8 @@ class Settings(BaseSettings):
     # Logging
     # ========================================================================
     log_level: str = "INFO"
-        # ========================================================================
+
+    # ========================================================================
     # Public activity / landing page
     # ========================================================================
     public_anomaly_threshold: int = 5000
@@ -114,9 +126,29 @@ class Settings(BaseSettings):
     polar_access_token: str = ""
     polar_product_id_pro: str = ""
     polar_webhook_secret: str = ""
-    polar_success_url: str = "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=success"
-    polar_return_url: str = "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=cancel"
-    
+    polar_success_url: str = (
+        "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=success"
+    )
+    polar_return_url: str = (
+        "https://leesintheblindmonk1999.github.io/sas-landing/?checkout=cancel"
+    )
+
+    # ========================================================================
+    # Mercado Pago billing
+    # ========================================================================
+    mercadopago_access_token: str = ""
+    mercadopago_public_key: str = ""
+    mercadopago_webhook_secret: str = ""
+    mercadopago_success_url: str = (
+        "https://leesintheblindmonk1999.github.io/sas-landing/?mp=success"
+    )
+    mercadopago_pending_url: str = (
+        "https://leesintheblindmonk1999.github.io/sas-landing/?mp=pending"
+    )
+    mercadopago_failure_url: str = (
+        "https://leesintheblindmonk1999.github.io/sas-landing/?mp=failure"
+    )
+
     # ========================================================================
     # SAS Identity / Metadata
     # ========================================================================
@@ -164,6 +196,7 @@ class Settings(BaseSettings):
         """Return enabled thermic modules as normalized uppercase codes."""
         if not self.modules_enabled.strip():
             return []
+
         return [
             module.strip().upper()
             for module in self.modules_enabled.split(",")
