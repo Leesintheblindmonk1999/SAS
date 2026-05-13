@@ -7,6 +7,8 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](https://sas-api.onrender.com/docs)
+[![Key Automation](https://img.shields.io/badge/API%20keys-automated-success)](#es-auth)
+[![Payments](https://img.shields.io/badge/payments-Polar%20%2B%20Mercado%20Pago-blueviolet)](#es-planes)
 [![Status](https://img.shields.io/badge/status-research%20alpha-orange)](#es-alcance-y-limitaciones)
 [![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](docs/benchmark_complete_20260429_172647.json)
 [![OTS Proof](https://img.shields.io/badge/OpenTimestamps-proof-blueviolet)](docs/benchmark_complete_20260429_172647.json.ots)
@@ -57,6 +59,28 @@ _Last automated update / Última actualización automática:_ `2026-05-12T19:41:
 - [Español](#es)
 - [English](#en)
   
+---
+
+
+## Repository Ecosystem / Ecosistema de repositorios
+
+| Repository | Role |
+|---|---|
+| [`SAS`](https://github.com/Leesintheblindmonk1999/SAS) | Main API, core engine, benchmark, docs, Docker/self-hosting, hosted service reference |
+| [`sas-landing`](https://github.com/Leesintheblindmonk1999/sas-landing) | Public legitimacy layer: static site, benchmark summary, API status, anonymized activity, demo, commercial contact |
+| [`sas-client`](https://github.com/Leesintheblindmonk1999/sas-client) | Official Python client and CLI for health, readiness, public stats/activity, audit, diff and chat |
+
+---
+
+## Current Hosted Features / Funciones hosted actuales
+
+- Live hosted API: `https://sas-api.onrender.com`
+- Public demo endpoint without API key: `POST /public/demo/audit`
+- Automatic Free API key issuance: `POST /public/request-key`
+- Automatic Pro key provisioning through Polar and Mercado Pago payment flows
+- Account/plan inspection endpoint: `GET /v1/whoami`
+- Public operational metrics: `GET /public/stats` and `GET /public/activity?limit=10`
+
 ---
 
 <a id="es"></a>
@@ -138,9 +162,19 @@ print(result.get("evidence", {}).get("fired_modules"))
 
 ```bash
 sas health
+sas readyz
 sas public-stats
 sas public-activity --limit 10
+sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
 sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+```
+
+También podés usar la variable de entorno `SAS_API_KEY` o apuntar el cliente a una instancia propia:
+
+```bash
+export SAS_API_KEY="YOUR_API_KEY"
+sas diff "Python is a programming language." "A python is a snake."
+sas --base-url https://your-sas-instance.example.com health
 ```
 
 En Windows PowerShell:
@@ -149,6 +183,10 @@ En Windows PowerShell:
 $env:SAS_API_KEY="YOUR_API_KEY"
 sas diff "Python is a programming language." "A python is a snake."
 ```
+
+### Privacidad del cliente
+
+El cliente Python no recolecta telemetría, no almacena API keys ni persiste requests/responses localmente. Las requests se envían únicamente al `base_url` configurado, que por defecto es `https://sas-api.onrender.com`.
 
 ---
 
@@ -174,7 +212,22 @@ sas diff "Python is a programming language." "A python is a snake."
 
 **Landing page oficial:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
 
-Benchmark, declaración de neutralidad geopolítica, registro TAD, DOI y anclaje OpenTimestamps.
+Benchmark, declaración de neutralidad geopolítica, registro TAD, DOI, actividad pública anonimizada, demo interactiva y anclaje OpenTimestamps.
+
+### Recursos públicos expuestos por la landing
+
+| Recurso | URL |
+|---|---|
+| Sitio vivo | `https://leesintheblindmonk1999.github.io/sas-landing/` |
+| API root | `https://sas-api.onrender.com` |
+| API docs | `https://sas-api.onrender.com/docs` |
+| Health | `https://sas-api.onrender.com/health` |
+| Readiness | `https://sas-api.onrender.com/readyz` |
+| Public stats | `https://sas-api.onrender.com/public/stats` |
+| Public activity | `https://sas-api.onrender.com/public/activity?limit=100` |
+| Public demo | `POST https://sas-api.onrender.com/public/demo/audit` |
+
+La landing funciona como capa pública de legitimidad técnica: concentra benchmark, trazabilidad legal/técnica, estado de API, actividad pública anonimizada, neutralidad geopolítica, contacto comercial y demo interactiva.
 
 ---
 <a id="es-problema"></a>
@@ -258,12 +311,15 @@ SAS/
 ## Arquitectura
 
 ```text
-
 SAS/
-├── app/                   # Código principal de la API
-│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
-│   └── services/          # Motor core: TDA + NIG + módulos E9-E12
-├── tests/benchmark_runner.py # Script de benchmark
+├── app/                          # Código principal de la API
+│   ├── main.py                   # FastAPI app
+│   ├── routers/                  # Endpoints: audit, diff, chat, demo, billing
+│   ├── services/                 # Motor core: TDA + NIG + módulos E9-E12
+│   ├── db/                       # SQLite/auth store, planes, rate limit y keys
+│   └── middleware/               # Auth, rate limiting, observabilidad y seguridad
+├── docs/                         # Documentación, benchmark y pruebas OTS
+├── tests/benchmark_runner.py     # Script de benchmark
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
@@ -280,11 +336,11 @@ SAS/
 | E10 | Grounding factual / detección de inventiva narrativa |
 | E11 | Detección de inconsistencia temporal |
 | E12 | Detección de cambio abrupto de tema |
-| FastAPI | Capa API para audit, diff, chat, health y administración |
+| FastAPI | Capa API para audit, diff, chat, demo pública, billing, health y administración |
+| Auth Store | Gestión de API keys, planes, límites y estado de cuenta |
+| Billing Webhooks | Automatización de altas Pro mediante Polar y Mercado Pago |
 
 Para una explicación técnica más profunda, ver [docs/architecture.md](docs/architecture.md).
-
----
 
 <a id="es-benchmark"></a>
 
@@ -354,14 +410,24 @@ Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos
 
 | Plan | Uso / Características | Precio |
 | :--- | :--- | :--- |
-| **SAS Free** | 50 requests/día. API Key incluida. Ideal para pruebas, desarrollo individual y evaluación técnica inicial. | **Gratis** |
-| **SAS Developer / Pro** | 10.000 requests/mes. API Key. Acceso a la API pública alojada. Soporte básico por email. | **99 USD/mes** |
+| **SAS Free** | 50 requests/día. API key automática por email. Ideal para pruebas, desarrollo individual y evaluación técnica inicial. | **Gratis** |
+| **SAS Developer / Pro** | 10.000 requests/mes. API key Pro automática tras pago confirmado. Acceso a la API pública alojada. Soporte básico por email. | **99 USD/mes** |
 | **SAS Team** | 50.000 requests/mes. Uso para equipos. Soporte prioritario. Adecuado para startups RAG, equipos ML y validación interna. | **299 USD/mes** |
 | **SAS Enterprise Cloud** | Volumen alto o paquete personalizado. Soporte directo. Integración privada. SLA según acuerdo comercial. | **Desde 1.500 USD/mes** |
 | **SAS On-Premise License** | Despliegue privado en infraestructura del cliente. Licencia comercial. Integración interna y soporte de implementación. | **Desde 15.000 USD/año** |
 | **Piloto técnico** | Auditoría inicial, integración guiada, informe técnico y validación sobre casos de uso del cliente. | **1.500–3.000 USD, pago único** |
 
 > **Nota de licencia:** el código sigue publicado bajo **GPL-3.0 + Durante Invariance License**. Los planes anteriores corresponden al uso del servicio alojado, soporte comercial, integración privada o licenciamiento empresarial. Cualquier organización puede autoalojar SAS bajo los términos de la licencia correspondiente.
+
+### Pagos y automatización de keys
+
+SAS incluye automatización de emisión de API keys para el servicio alojado:
+
+- **Free key:** solicitud pública mediante `/public/request-key`, envío automático por email y límite de 1 key Free por email por día.
+- **Polar:** pagos internacionales con tarjeta para suscripciones Pro.
+- **Mercado Pago:** pagos LATAM para suscripciones Pro.
+- **Webhooks de billing:** al confirmarse el pago, SAS genera una API key Pro, activa el plan correspondiente y la envía automáticamente por email.
+- **Verificación de cuenta:** `/v1/whoami` permite consultar plan activo, límite y estado de la API key.
 
 📧 **Consultas comerciales, licencias Enterprise u On-Premise:** duranteg2@gmail.com
 
@@ -370,8 +436,6 @@ Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos
 SAS está diseñado para auditoría de alucinaciones orientada a precisión. En el benchmark actual, SAS reporta **98.8% de accuracy**, **100% de precision** y **97.6% de recall** sobre 2,000 pares evaluados.
 
 No pagas por una similitud vaga. Pagas por detección estructural auditable, métricas claras, artefactos trazables y evidencia reproducible.
-
----
 
 <a id="es-inicio-rapido"></a>
 
@@ -388,6 +452,21 @@ Health check:
 ```bash
 curl https://sas-api.onrender.com/health
 ```
+
+### Demo pública — sin API key
+
+Probá el motor real sin registrarte:
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/demo/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "The Eiffel Tower is located in Paris, France.",
+    "response": "The Eiffel Tower is located in Berlin, Germany."
+  }'
+```
+
+O desde la landing interactiva: [sas-landing/#demo](https://leesintheblindmonk1999.github.io/sas-landing/#demo)
 
 ### Opción 1: Docker / autoalojamiento
 
@@ -445,8 +524,6 @@ Ejecutar API:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
----
-
 <a id="es-configuracion"></a>
 
 ## Configuración
@@ -456,8 +533,22 @@ Crear un archivo local `.env`:
 ```env
 ADMIN_SECRET=change-this-admin-secret
 FREE_REQUESTS_PER_DAY=50
+PRO_REQUESTS_PER_MONTH=10000
+TEAM_REQUESTS_PER_MONTH=50000
 MODULES_ENABLED=E9,E10,E11,E12
 CORS_ALLOW_ORIGINS=*
+
+# Optional: email delivery for automatic key provisioning
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=no-reply@example.com
+
+# Optional: payment automation
+POLAR_WEBHOOK_SECRET=change-this-polar-secret
+MERCADOPAGO_ACCESS_TOKEN=change-this-mercadopago-token
+MERCADOPAGO_WEBHOOK_SECRET=change-this-mp-secret
 ```
 
 No subir archivos `.env` a repositorios públicos.
@@ -470,23 +561,58 @@ ADMIN_SECRET=use-a-strong-random-secret
 FREE_REQUESTS_PER_DAY=50
 ```
 
----
+### Variables opcionales para email, billing y automatización de keys
+
+Los nombres exactos pueden variar según tu despliegue, pero una instalación hosted suele requerir variables de este tipo:
+
+```env
+# Email delivery
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+EMAIL_FROM=SAS <noreply@yourdomain.com>
+
+# Billing providers
+POLAR_WEBHOOK_SECRET=change-this-polar-secret
+MERCADOPAGO_ACCESS_TOKEN=change-this-mercadopago-token
+MERCADOPAGO_WEBHOOK_SECRET=change-this-mercadopago-secret
+
+# Hosted API plans
+PRO_REQUESTS_PER_MONTH=10000
+TEAM_REQUESTS_PER_MONTH=50000
+```
+
+Nunca publiques tokens de Mercado Pago, secrets de Polar, credenciales SMTP, `ADMIN_SECRET` ni bases de datos con API keys reales.
 
 <a id="es-auth"></a>
 
-## Autenticación API
+## Autenticación API y obtención de keys
 
-La mayoría de endpoints requieren una API key.
+La mayoría de endpoints productivos requieren una API key.
 
-### API pública alojada
+### API key Free — automática
 
-Para el servicio alojado, las API keys son emitidas por el operador del servicio.
+Solicitá tu API key gratuita directamente desde el endpoint público:
 
-Contacto:
-
-```text
-duranteg2@gmail.com
+```bash
+curl -X POST https://sas-api.onrender.com/public/request-key \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your@email.com", "name": "Tu nombre"}'
 ```
+
+Recibirás tu API key por email de forma automática. Sin intervención manual.
+
+Límite: 1 key Free por email por día.
+
+### Plan Pro — pago automático
+
+Suscripción Pro disponible vía:
+
+- **Polar:** pagos internacionales con tarjeta.
+- **Mercado Pago:** pagos disponibles para LATAM.
+
+Al confirmar el pago, la API key Pro se genera y se envía automáticamente por email.
 
 ### Autoalojamiento
 
@@ -512,7 +638,23 @@ Usar la API key en requests:
 -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
 ```
 
----
+### Verificar tu plan
+
+```bash
+curl https://sas-api.onrender.com/v1/whoami \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
+```
+
+Ejemplo:
+
+```json
+{
+  "plan": "free",
+  "active": true,
+  "daily_limit": 50,
+  "email": "yo***@gmail.com"
+}
+```
 
 <a id="es-ejemplos-api"></a>
 
@@ -550,6 +692,19 @@ Ejemplo:
 
 ---
 
+### Demo pública sin API key
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/demo/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "The Eiffel Tower is located in Paris, France.",
+    "response": "The Eiffel Tower is located in Berlin, Germany."
+  }'
+```
+
+---
+
 ### Auditar una respuesta generada
 
 ```bash
@@ -580,7 +735,7 @@ Ejemplo de respuesta:
 
 ---
 
-### Comparar dos textos
+### Comparar dos textos — endpoint forense principal
 
 ```bash
 curl -X POST https://sas-api.onrender.com/v1/diff \
@@ -618,6 +773,33 @@ curl -X POST https://sas-api.onrender.com/v1/chat \
 ```
 
 ---
+
+### Endpoints públicos sin key
+
+```bash
+curl https://sas-api.onrender.com/public/stats
+curl "https://sas-api.onrender.com/public/activity?limit=10"
+curl https://sas-api.onrender.com/readyz
+```
+
+---
+
+### Solicitud de key Free
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/request-key \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your@email.com", "name": "Your Name"}'
+```
+
+---
+
+### Verificar plan actual
+
+```bash
+curl https://sas-api.onrender.com/v1/whoami \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
+```
 
 <a id="es-modulos"></a>
 
@@ -877,9 +1059,19 @@ print(result.get("evidence", {}).get("fired_modules"))
 
 ```bash
 sas health
+sas readyz
 sas public-stats
 sas public-activity --limit 10
+sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
 sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+```
+
+You can also use the `SAS_API_KEY` environment variable or point the CLI to a self-hosted instance:
+
+```bash
+export SAS_API_KEY="YOUR_API_KEY"
+sas diff "Python is a programming language." "A python is a snake."
+sas --base-url https://your-sas-instance.example.com health
 ```
 
 Windows PowerShell:
@@ -888,6 +1080,10 @@ Windows PowerShell:
 $env:SAS_API_KEY="YOUR_API_KEY"
 sas diff "Python is a programming language." "A python is a snake."
 ```
+
+### Client privacy
+
+The Python client does not collect telemetry, does not store API keys, and does not persist requests or responses locally. Requests are sent only to the configured `base_url`, which defaults to `https://sas-api.onrender.com`.
 
 ---
 
@@ -913,7 +1109,22 @@ sas diff "Python is a programming language." "A python is a snake."
 
 **Official Landing Page:** [sas-landing](https://leesintheblindmonk1999.github.io/sas-landing/)
 
-Benchmark, Declaration of Geopolitical Neutrality, TAD Registration, DOI, and OpenTimestamps Anchoring.
+Benchmark, Declaration of Geopolitical Neutrality, TAD Registration, DOI, anonymized public activity, interactive demo, and OpenTimestamps anchoring.
+
+### Public resources exposed by the landing
+
+| Resource | URL |
+|---|---|
+| Live site | `https://leesintheblindmonk1999.github.io/sas-landing/` |
+| API root | `https://sas-api.onrender.com` |
+| API docs | `https://sas-api.onrender.com/docs` |
+| Health | `https://sas-api.onrender.com/health` |
+| Readiness | `https://sas-api.onrender.com/readyz` |
+| Public stats | `https://sas-api.onrender.com/public/stats` |
+| Public activity | `https://sas-api.onrender.com/public/activity?limit=100` |
+| Public demo | `POST https://sas-api.onrender.com/public/demo/audit` |
+
+The landing acts as the public technical legitimacy layer for SAS: benchmark evidence, legal/technical traceability, API status, anonymized public activity, geopolitical neutrality, commercial contact, and an interactive demo.
 
 ---
 
@@ -999,10 +1210,14 @@ SAS/
 
 ```text
 SAS/
-├── app/                   # Main API code
-│   ├── main.py            # FastAPI app: /v1/audit, /v1/diff, /v1/chat, /health
-│   └── services/          # Core engine: TDA + NIG + E9-E12 modules
-├── tests/benchmark_runner.py # Benchmark execution script
+├── app/                          # Main API code
+│   ├── main.py                   # FastAPI app
+│   ├── routers/                  # Endpoints: audit, diff, chat, demo, billing
+│   ├── services/                 # Core engine: TDA + NIG + E9-E12 modules
+│   ├── db/                       # SQLite/auth store, plans, rate limits, and keys
+│   └── middleware/               # Auth, rate limiting, observability, and security
+├── docs/                         # Documentation, benchmark, and OTS proof
+├── tests/benchmark_runner.py     # Benchmark execution script
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
@@ -1019,11 +1234,11 @@ SAS/
 | E10 | Fact grounding / narrative inventiveness check |
 | E11 | Temporal inconsistency detection |
 | E12 | Abrupt topic shift detection |
-| FastAPI | API layer for audit, diff, chat, health, and admin functions |
+| FastAPI | API layer for audit, diff, chat, public demo, billing, health, and admin functions |
+| Auth Store | API key, plan, usage-limit, and account-state management |
+| Billing Webhooks | Automatic Pro activation through Polar and Mercado Pago |
 
 For a deeper technical view, see [docs/architecture.md](docs/architecture.md).
-
----
 
 <a id="en-benchmark"></a>
 
@@ -1093,8 +1308,8 @@ Anyone may self-host their own SAS instance under the terms of GPL-3.0 + Durante
 
 | Plan | Usage / Features | Price |
 | :--- | :--- | :--- |
-| **SAS Free** | 50 requests/day. API Key included. Ideal for testing, individual development, and initial technical evaluation. | **Free** |
-| **SAS Developer / Pro** | 10,000 requests/month. API Key. Access to the hosted public API. Basic email support. | **USD 99/month** |
+| **SAS Free** | 50 requests/day. Automatic API key by email. Ideal for testing, individual development, and initial technical evaluation. | **Free** |
+| **SAS Developer / Pro** | 10,000 requests/month. Automatic Pro API key after confirmed payment. Hosted public API access. Basic email support. | **USD 99/month** |
 | **SAS Team** | 50,000 requests/month. Team usage. Priority support. Suitable for RAG startups, ML teams, and internal validation. | **USD 299/month** |
 | **SAS Enterprise Cloud** | High-volume usage or custom request package. Direct support. Private integration. SLA according to commercial agreement. | **From USD 1,500/month** |
 | **SAS On-Premise License** | Private deployment on customer infrastructure. Commercial license. Internal integration and implementation support. | **From USD 15,000/year** |
@@ -1102,17 +1317,23 @@ Anyone may self-host their own SAS instance under the terms of GPL-3.0 + Durante
 
 > **License note:** the code remains published under **GPL-3.0 + Durante Invariance License**. The plans above refer to the hosted service, commercial support, private integration, or enterprise licensing. Any organization may self-host SAS under the applicable license terms.
 
-📧 **Commercial inquiries, Enterprise licensing, or On-Premise deployment:** duranteg2@gmail.com
+### Payments and key automation
 
-📧 **Interested in an Enterprise license or need a custom plan?** Contact: **duranteg2@gmail.com**
+SAS includes automated API key issuance for the hosted service:
+
+- **Free key:** public request through `/public/request-key`, automatic email delivery, and a limit of 1 Free key per email per day.
+- **Polar:** international card payments for Pro subscriptions.
+- **Mercado Pago:** LATAM payments for Pro subscriptions.
+- **Billing webhooks:** after payment confirmation, SAS generates a Pro API key, activates the corresponding plan, and sends the key automatically by email.
+- **Account verification:** `/v1/whoami` returns the active plan, usage limit, and API key state.
+
+📧 **Commercial inquiries, Enterprise licensing, or On-Premise deployment:** duranteg2@gmail.com
 
 ### Commercial Positioning
 
 SAS is designed for precision-oriented hallucination auditing. In the current benchmark, SAS reports **98.8% accuracy**, **100% precision**, and **97.6% recall** across 2,000 evaluated pairs.
 
 You are not paying for vague similarity scoring. You are paying for auditable structural detection with clear metrics, traceable benchmark artifacts, and reproducible evidence.
-
----
 
 <a id="en-quick-start"></a>
 
@@ -1129,6 +1350,21 @@ Health check:
 ```bash
 curl https://sas-api.onrender.com/health
 ```
+
+### Public demo — no API key required
+
+Try the real engine without registration:
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/demo/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "The Eiffel Tower is located in Paris, France.",
+    "response": "The Eiffel Tower is located in Berlin, Germany."
+  }'
+```
+
+Or try the interactive demo: [sas-landing/#demo](https://leesintheblindmonk1999.github.io/sas-landing/#demo)
 
 ### Option 1: Docker Self-Hosting
 
@@ -1186,8 +1422,6 @@ Run the API:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
----
-
 <a id="en-configuration"></a>
 
 ## Configuration
@@ -1197,8 +1431,22 @@ Create a local `.env` file:
 ```env
 ADMIN_SECRET=change-this-admin-secret
 FREE_REQUESTS_PER_DAY=50
+PRO_REQUESTS_PER_MONTH=10000
+TEAM_REQUESTS_PER_MONTH=50000
 MODULES_ENABLED=E9,E10,E11,E12
 CORS_ALLOW_ORIGINS=*
+
+# Optional: email delivery for automatic key provisioning
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=no-reply@example.com
+
+# Optional: payment automation
+POLAR_WEBHOOK_SECRET=change-this-polar-secret
+MERCADOPAGO_ACCESS_TOKEN=change-this-mercadopago-token
+MERCADOPAGO_WEBHOOK_SECRET=change-this-mp-secret
 ```
 
 Do not commit `.env` files to public repositories.
@@ -1211,23 +1459,58 @@ ADMIN_SECRET=use-a-strong-random-secret
 FREE_REQUESTS_PER_DAY=50
 ```
 
----
+### Optional variables for email, billing, and key automation
+
+Exact names may vary depending on your deployment, but a hosted setup usually requires variables like these:
+
+```env
+# Email delivery
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+EMAIL_FROM=SAS <noreply@yourdomain.com>
+
+# Billing providers
+POLAR_WEBHOOK_SECRET=change-this-polar-secret
+MERCADOPAGO_ACCESS_TOKEN=change-this-mercadopago-token
+MERCADOPAGO_WEBHOOK_SECRET=change-this-mercadopago-secret
+
+# Hosted API plans
+PRO_REQUESTS_PER_MONTH=10000
+TEAM_REQUESTS_PER_MONTH=50000
+```
+
+Never publish Mercado Pago tokens, Polar secrets, SMTP credentials, `ADMIN_SECRET`, or databases containing real API keys.
 
 <a id="en-auth"></a>
 
-## API Authentication
+## API Authentication and Key Acquisition
 
-Most API endpoints require an API key.
+Most production API endpoints require an API key.
 
-### Hosted Public API
+### Free API key — automatic
 
-For the hosted service, API keys are issued by the service operator.
+Request your free API key directly:
 
-Contact:
-
-```text
-duranteg2@gmail.com
+```bash
+curl -X POST https://sas-api.onrender.com/public/request-key \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your@email.com", "name": "Your Name"}'
 ```
+
+Your API key will be delivered automatically by email. No manual intervention required.
+
+Limit: 1 Free key per email per day.
+
+### Pro plan — automatic payment
+
+Pro subscriptions are available through:
+
+- **Polar:** international card payments.
+- **Mercado Pago:** payments available for LATAM.
+
+After payment confirmation, the Pro API key is generated and delivered automatically by email.
 
 ### Self-hosting
 
@@ -1253,7 +1536,23 @@ Use the returned key in API requests:
 -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
 ```
 
----
+### Check your plan
+
+```bash
+curl https://sas-api.onrender.com/v1/whoami \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
+```
+
+Example:
+
+```json
+{
+  "plan": "free",
+  "active": true,
+  "daily_limit": 50,
+  "email": "yo***@gmail.com"
+}
+```
 
 <a id="en-api-examples"></a>
 
@@ -1291,6 +1590,19 @@ Example response:
 
 ---
 
+### Public demo without API key
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/demo/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "The Eiffel Tower is located in Paris, France.",
+    "response": "The Eiffel Tower is located in Berlin, Germany."
+  }'
+```
+
+---
+
 ### Audit a Generated Response
 
 ```bash
@@ -1321,7 +1633,7 @@ Example response:
 
 ---
 
-### Compare Two Texts
+### Compare Two Texts — primary forensic endpoint
 
 ```bash
 curl -X POST https://sas-api.onrender.com/v1/diff \
@@ -1359,6 +1671,33 @@ curl -X POST https://sas-api.onrender.com/v1/chat \
 ```
 
 ---
+
+### Public endpoints without key
+
+```bash
+curl https://sas-api.onrender.com/public/stats
+curl "https://sas-api.onrender.com/public/activity?limit=10"
+curl https://sas-api.onrender.com/readyz
+```
+
+---
+
+### Free key request
+
+```bash
+curl -X POST https://sas-api.onrender.com/public/request-key \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your@email.com", "name": "Your Name"}'
+```
+
+---
+
+### Check current plan
+
+```bash
+curl https://sas-api.onrender.com/v1/whoami \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx"
+```
 
 <a id="en-modules"></a>
 
