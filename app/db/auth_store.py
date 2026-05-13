@@ -72,6 +72,7 @@ def generate_api_key(plan: str = "free") -> str:
     prefix = {
         "free": "sas_free_",
         "pro": "sas_pro_",
+        "developer": "sas_pro_",
         "team": "sas_team_",
         "enterprise": "sas_ent_",
         "legacy": "sas_legacy_",
@@ -90,7 +91,7 @@ def plan_limits(plan: str) -> dict[str, int | None]:
             "monthly_limit": None,
         }
 
-    if plan == "pro":
+    if plan in {"pro", "developer"}:
         return {
             "daily_limit": None,
             "monthly_limit": int(getattr(settings, "pro_requests_per_month", 10000)),
@@ -102,8 +103,17 @@ def plan_limits(plan: str) -> dict[str, int | None]:
             "monthly_limit": int(getattr(settings, "team_requests_per_month", 50000)),
         }
 
-    if plan in {"enterprise", "legacy"}:
-        return {"daily_limit": None, "monthly_limit": None}
+    if plan == "enterprise":
+        return {
+            "daily_limit": None,
+            "monthly_limit": None,
+        }
+
+    if plan == "legacy":
+        return {
+            "daily_limit": int(getattr(settings, "legacy_requests_per_day", 5)),
+            "monthly_limit": None,
+        }
 
     return {
         "daily_limit": int(getattr(settings, "free_requests_per_day", 50)),
@@ -224,46 +234,102 @@ def init_auth_db() -> None:
 
 def _ensure_legacy_key(conn: sqlite3.Connection) -> None:
     """
-    Preserve compatibility with your existing sas_test_key_2026 workflow.
+    Preserve compatibility with the existing sas_test_key_2026 workflow.
 
-    This only creates the legacy key if no user exists with that hash.
-    You can remove LEGACY_API_KEYS later when the self-service key flow is stable.
+    The legacy key is kept only as a shared compatibility/demo key.
+    It is limited by settings.legacy_requests_per_day and should not be used
+    as a normal production API key.
     """
     legacy_key = getattr(settings, "legacy_bootstrap_api_key", "sas_test_key_2026").strip()
     if not legacy_key:
         return
 
     key_hash = hash_api_key(legacy_key)
-    row = conn.execute("SELECT id FROM users WHERE api_key_hash = ?", (key_hash,)).fetchone()
+    limits = plan_limits("legacy")
+
+    row = conn.execute(
+        "SELECT id FROM users WHERE api_key_hash = ?",
+        (key_hash,),
+    ).fetchone()
+
     if row:
+        conn.execute(
+            """
+            UPDATE users
+            SET plan = 'legacy',
+                status = 'active',
+                daily_limit = ?,
+                monthly_limit = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                limits["daily_limit"],
+                limits["monthly_limit"],
+                utc_now(),
+                row["id"],
+            ),
+        )
         return
 
     email = "legacy@sas.local"
     email_h = hash_email(email)
     now = utc_now()
 
-    existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    existing = conn.execute(
+        "SELECT id FROM users WHERE email = ?",
+        (email,),
+    ).fetchone()
+
     if existing:
         conn.execute(
             """
             UPDATE users
-            SET api_key_hash = ?, plan = 'legacy', status = 'active',
-                daily_limit = NULL, monthly_limit = NULL, updated_at = ?
+            SET api_key_hash = ?,
+                plan = 'legacy',
+                status = 'active',
+                daily_limit = ?,
+                monthly_limit = ?,
+                updated_at = ?
             WHERE id = ?
             """,
-            (key_hash, now, existing["id"]),
+            (
+                key_hash,
+                limits["daily_limit"],
+                limits["monthly_limit"],
+                now,
+                existing["id"],
+            ),
         )
         return
 
     conn.execute(
         """
         INSERT INTO users(
-            email, email_hash, name, api_key_hash, plan, status,
-            daily_limit, monthly_limit, created_at, updated_at, last_key_issued_at
+            email,
+            email_hash,
+            name,
+            api_key_hash,
+            plan,
+            status,
+            daily_limit,
+            monthly_limit,
+            created_at,
+            updated_at,
+            last_key_issued_at
         )
-        VALUES (?, ?, 'Legacy SAS Key', ?, 'legacy', 'active', NULL, NULL, ?, ?, ?)
+        VALUES (?, ?, 'Legacy SAS Key', ?, 'legacy', 'active', ?, ?, ?, ?, ?)
         """,
-        (email, email_h, key_hash, now, now, now),
+        (
+            email,
+            email_h,
+            key_hash,
+            limits["daily_limit"],
+            limits["monthly_limit"],
+            now,
+            now,
+            now,
+        ),
     )
 
 
@@ -396,7 +462,7 @@ def create_or_rotate_key_for_email(email: str, name: str | None, ip_hash: str) -
     plan = (existing or {}).get("plan", "free")
     status = (existing or {}).get("status", "active")
 
-    if plan not in {"free", "pro", "team", "enterprise", "legacy"}:
+    if plan not in {"free", "pro", "developer", "team", "enterprise", "legacy"}:
         plan = "free"
 
     raw_key = generate_api_key(plan)
@@ -518,7 +584,7 @@ def usage_counts(user_id: int) -> dict[str, int]:
 
 
 def quota_state(user: dict[str, Any]) -> dict[str, Any]:
-    if not user or not user.get("id") or user.get("plan") == "legacy":
+    if not user or not user.get("id"):
         return {
             "allowed": True,
             "daily_used": 0,
@@ -569,7 +635,7 @@ def record_api_usage(
     status_code: int,
     request_id: str | None = None,
 ) -> None:
-    if not user or not user.get("id") or user.get("plan") == "legacy":
+    if not user or not user.get("id"):
         return
 
     with connect() as conn:
