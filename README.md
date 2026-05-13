@@ -68,7 +68,7 @@ _Last automated update / Última actualización automática:_ `2026-05-12T19:41:
 |---|---|
 | [`SAS`](https://github.com/Leesintheblindmonk1999/SAS) | Main API, core engine, benchmark, docs, Docker/self-hosting, hosted service reference |
 | [`sas-landing`](https://github.com/Leesintheblindmonk1999/sas-landing) | Public legitimacy layer: static site, benchmark summary, API status, anonymized activity, demo, commercial contact |
-| [`sas-client`](https://github.com/Leesintheblindmonk1999/sas-client) | Official Python client and CLI for health, readiness, public stats/activity, audit, diff and chat |
+| [`sas-client`](https://github.com/Leesintheblindmonk1999/sas-client) | Official Python client and CLI for health, readiness, public stats/activity, public demo, API key requests, whoami, audit, diff and chat |
 
 ---
 
@@ -150,7 +150,7 @@ client = SASClient(api_key="YOUR_API_KEY")
 
 result = client.diff(
     text_a="Python is a programming language.",
-    text_b="A python is a snake."
+    text_b="A python is a snake.",
 )
 
 print(result["isi"])
@@ -158,31 +158,78 @@ print(result["verdict"])
 print(result.get("evidence", {}).get("fired_modules"))
 ```
 
+### Solicitar una Free API key desde CLI
+
+Desde `sas-client` v0.2.0, los desarrolladores pueden pedir una API key gratuita directamente desde la terminal:
+
+```bash
+pip install sas-client
+sas request-key --email your@email.com --name "Your Name"
+```
+
+La key se genera y se envía automáticamente por email.
+
 ### Uso CLI
+
+Comandos públicos sin API key:
 
 ```bash
 sas health
 sas readyz
 sas public-stats
 sas public-activity --limit 10
-sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
-sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+sas plans
+sas demo-audit "The Eiffel Tower is located in Paris, France, and was built in 1889." "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
 ```
 
-También podés usar la variable de entorno `SAS_API_KEY` o apuntar el cliente a una instancia propia:
+Comandos autenticados:
+
+```bash
+sas --api-key YOUR_API_KEY whoami
+sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
+sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+sas --api-key YOUR_API_KEY chat "Explain κD = 0.56 in one paragraph."
+```
+
+También podés usar la variable de entorno `SAS_API_KEY` o `SAS_KEY`:
 
 ```bash
 export SAS_API_KEY="YOUR_API_KEY"
+
+sas whoami
 sas diff "Python is a programming language." "A python is a snake."
-sas --base-url https://your-sas-instance.example.com health
 ```
 
 En Windows PowerShell:
 
 ```powershell
 $env:SAS_API_KEY="YOUR_API_KEY"
+
+sas whoami
 sas diff "Python is a programming language." "A python is a snake."
 ```
+
+También podés apuntar el cliente a una instancia propia:
+
+```bash
+sas --base-url https://your-sas-instance.example.com health
+```
+
+### Comandos disponibles en `sas-client` v0.2.0
+
+| Comando | Requiere API key | Función |
+|---|---:|---|
+| `sas health` | No | Verifica `/health` |
+| `sas readyz` | No | Verifica `/readyz` y routers activos |
+| `sas public-stats` | No | Muestra métricas públicas agregadas |
+| `sas public-activity --limit 10` | No | Muestra actividad pública anonimizada |
+| `sas plans` | No | Muestra planes hosted Free / Pro |
+| `sas request-key --email you@example.com --name "Name"` | No | Solicita una Free API key por email |
+| `sas demo-audit "source" "response"` | No | Ejecuta la demo pública sin key |
+| `sas whoami` | Sí | Muestra plan, estado y límites de la key |
+| `sas audit "text"` | Sí | Audita un texto |
+| `sas diff "source" "response"` | Sí | Compara fuente contra respuesta |
+| `sas chat "message"` | Sí | Usa el endpoint chat |
 
 ### Privacidad del cliente
 
@@ -332,6 +379,7 @@ SAS/
 | TDA | Topological Data Analysis para comparación estructural semántica |
 | ISI | Invariant Similarity Index |
 | NIG | Numerical Invariance Guard |
+| SourceTargetGuard | Guardia de invariancia fuente-respuesta para detectar cambios críticos de años, números, lugares y entidades ancladas |
 | E9 | Detección de contradicción lógica |
 | E10 | Grounding factual / detección de inventiva narrativa |
 | E11 | Detección de inconsistencia temporal |
@@ -451,6 +499,29 @@ Health check:
 
 ```bash
 curl https://sas-api.onrender.com/health
+```
+
+### Cliente Python / CLI
+
+```bash
+pip install sas-client
+sas health
+sas request-key --email your@email.com --name "Tu nombre"
+```
+
+Una vez recibida la key:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+sas diff "The Eiffel Tower is located in Paris, France, and was built in 1889." "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+```
+
+PowerShell:
+
+```powershell
+$env:SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
 ```
 
 ### Demo pública — sin API key
@@ -593,7 +664,14 @@ La mayoría de endpoints productivos requieren una API key.
 
 ### API key Free — automática
 
-Solicitá tu API key gratuita directamente desde el endpoint público:
+Solicitá tu API key gratuita desde la CLI:
+
+```bash
+pip install sas-client
+sas request-key --email your@email.com --name "Tu nombre"
+```
+
+O directamente desde el endpoint público:
 
 ```bash
 curl -X POST https://sas-api.onrender.com/public/request-key \
@@ -639,6 +717,15 @@ Usar la API key en requests:
 ```
 
 ### Verificar tu plan
+
+Desde CLI:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+```
+
+Con curl:
 
 ```bash
 curl https://sas-api.onrender.com/v1/whoami \
@@ -786,6 +873,14 @@ curl https://sas-api.onrender.com/readyz
 
 ### Solicitud de key Free
 
+Desde CLI:
+
+```bash
+sas request-key --email your@email.com --name "Your Name"
+```
+
+Con curl:
+
 ```bash
 curl -X POST https://sas-api.onrender.com/public/request-key \
   -H "Content-Type: application/json" \
@@ -795,6 +890,15 @@ curl -X POST https://sas-api.onrender.com/public/request-key \
 ---
 
 ### Verificar plan actual
+
+Desde CLI:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+```
+
+Con curl:
 
 ```bash
 curl https://sas-api.onrender.com/v1/whoami \
@@ -819,6 +923,7 @@ MODULES_ENABLED=E9,E11
 
 | Módulo | Nombre | Función |
 |---|---|---|
+| SourceTargetGuard | Source-Target Invariance Guard | Detecta cambios críticos entre fuente y respuesta: años, números, ubicaciones y entidades ancladas |
 | E9 | Logical Contradiction | Detecta inversión lógica o contradicción interna |
 | E10 | Fact Grounding | Detecta claims no soportados cuando hay grounding local disponible |
 | E11 | Temporal Inconsistency | Detecta secuencias temporales incompatibles |
@@ -939,6 +1044,7 @@ SAS está diseñado para auditoría estructural de coherencia y detección de se
 Limitaciones conocidas:
 
 - El grounding factual depende de fuentes locales disponibles.
+- SourceTargetGuard detecta mutaciones críticas entre fuente y respuesta, pero no reemplaza una base de conocimiento factual externa.
 - La detección de cambio de tema es conservadora para reducir falsos positivos.
 - Los resultados deben interpretarse como evidencia técnica, no como certificación legal.
 - Los despliegues productivos requieren hardening de seguridad estándar.
@@ -1047,7 +1153,7 @@ client = SASClient(api_key="YOUR_API_KEY")
 
 result = client.diff(
     text_a="Python is a programming language.",
-    text_b="A python is a snake."
+    text_b="A python is a snake.",
 )
 
 print(result["isi"])
@@ -1055,31 +1161,78 @@ print(result["verdict"])
 print(result.get("evidence", {}).get("fired_modules"))
 ```
 
+### Request a Free API key from the CLI
+
+Since `sas-client` v0.2.0, developers can request a Free API key directly from the terminal:
+
+```bash
+pip install sas-client
+sas request-key --email your@email.com --name "Your Name"
+```
+
+The key is generated and delivered automatically by email.
+
 ### CLI usage
+
+Public commands without API key:
 
 ```bash
 sas health
 sas readyz
 sas public-stats
 sas public-activity --limit 10
-sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
-sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+sas plans
+sas demo-audit "The Eiffel Tower is located in Paris, France, and was built in 1889." "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
 ```
 
-You can also use the `SAS_API_KEY` environment variable or point the CLI to a self-hosted instance:
+Authenticated commands:
+
+```bash
+sas --api-key YOUR_API_KEY whoami
+sas --api-key YOUR_API_KEY audit "Paris is the capital of France. The Eiffel Tower is located in Berlin."
+sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is a snake."
+sas --api-key YOUR_API_KEY chat "Explain κD = 0.56 in one paragraph."
+```
+
+You can also use the `SAS_API_KEY` or `SAS_KEY` environment variables:
 
 ```bash
 export SAS_API_KEY="YOUR_API_KEY"
+
+sas whoami
 sas diff "Python is a programming language." "A python is a snake."
-sas --base-url https://your-sas-instance.example.com health
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:SAS_API_KEY="YOUR_API_KEY"
+
+sas whoami
 sas diff "Python is a programming language." "A python is a snake."
 ```
+
+You can also point the CLI to a self-hosted instance:
+
+```bash
+sas --base-url https://your-sas-instance.example.com health
+```
+
+### Commands available in `sas-client` v0.2.0
+
+| Command | Requires API key | Purpose |
+|---|---:|---|
+| `sas health` | No | Checks `/health` |
+| `sas readyz` | No | Checks `/readyz` and active routers |
+| `sas public-stats` | No | Shows aggregated public metrics |
+| `sas public-activity --limit 10` | No | Shows anonymized public activity |
+| `sas plans` | No | Shows hosted Free / Pro plan information |
+| `sas request-key --email you@example.com --name "Name"` | No | Requests a Free API key by email |
+| `sas demo-audit "source" "response"` | No | Runs the public no-key demo |
+| `sas whoami` | Yes | Shows key plan, status, and usage limits |
+| `sas audit "text"` | Yes | Audits one text |
+| `sas diff "source" "response"` | Yes | Compares source against response |
+| `sas chat "message"` | Yes | Uses the chat endpoint |
 
 ### Client privacy
 
@@ -1230,6 +1383,7 @@ SAS/
 | TDA | Topological Data Analysis for semantic structure comparison |
 | ISI | Invariant Similarity Index |
 | NIG | Numerical Invariance Guard |
+| SourceTargetGuard | Source-response invariance guard for critical changes in years, numbers, locations, and anchored entities |
 | E9 | Logical contradiction detection |
 | E10 | Fact grounding / narrative inventiveness check |
 | E11 | Temporal inconsistency detection |
@@ -1349,6 +1503,29 @@ Health check:
 
 ```bash
 curl https://sas-api.onrender.com/health
+```
+
+### Python client / CLI
+
+```bash
+pip install sas-client
+sas health
+sas request-key --email your@email.com --name "Your Name"
+```
+
+After receiving your key:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+sas diff "The Eiffel Tower is located in Paris, France, and was built in 1889." "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+```
+
+PowerShell:
+
+```powershell
+$env:SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
 ```
 
 ### Public demo — no API key required
@@ -1491,7 +1668,14 @@ Most production API endpoints require an API key.
 
 ### Free API key — automatic
 
-Request your free API key directly:
+Request your Free API key from the CLI:
+
+```bash
+pip install sas-client
+sas request-key --email your@email.com --name "Your Name"
+```
+
+Or request it directly from the public endpoint:
 
 ```bash
 curl -X POST https://sas-api.onrender.com/public/request-key \
@@ -1537,6 +1721,15 @@ Use the returned key in API requests:
 ```
 
 ### Check your plan
+
+From the CLI:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+```
+
+With curl:
 
 ```bash
 curl https://sas-api.onrender.com/v1/whoami \
@@ -1684,6 +1877,14 @@ curl https://sas-api.onrender.com/readyz
 
 ### Free key request
 
+From the CLI:
+
+```bash
+sas request-key --email your@email.com --name "Your Name"
+```
+
+With curl:
+
 ```bash
 curl -X POST https://sas-api.onrender.com/public/request-key \
   -H "Content-Type: application/json" \
@@ -1693,6 +1894,15 @@ curl -X POST https://sas-api.onrender.com/public/request-key \
 ---
 
 ### Check current plan
+
+From the CLI:
+
+```bash
+export SAS_API_KEY="sas_xxxxxxxxxxxxxxxxxxxxx"
+sas whoami
+```
+
+With curl:
 
 ```bash
 curl https://sas-api.onrender.com/v1/whoami \
@@ -1717,6 +1927,7 @@ MODULES_ENABLED=E9,E11
 
 | Module | Name | Function |
 |---|---|---|
+| SourceTargetGuard | Source-Target Invariance Guard | Detects critical source-response changes in years, numbers, locations, and anchored entities |
 | E9 | Logical Contradiction | Detects internal logical inversion or contradiction |
 | E10 | Fact Grounding | Detects unsupported claims when local grounding is available |
 | E11 | Temporal Inconsistency | Detects incompatible temporal sequences |
@@ -1837,6 +2048,7 @@ SAS is designed for structural coherence auditing and hallucination signal detec
 Known limitations:
 
 - Factual grounding depends on available local knowledge sources.
+- SourceTargetGuard detects critical source-response mutations, but it does not replace an external factual knowledge base.
 - Topic-shift detection is conservative to reduce false positives.
 - Results should be interpreted as technical evidence, not as legal certification.
 - Production deployments require standard security hardening.
