@@ -45,20 +45,32 @@ class _TimeoutError(Exception):
 
 
 def _with_timeout(fn, *args, seconds: int = SCAN_TIMEOUT_SECONDS, **kwargs):
+    """
+    Run a scan with a best-effort timeout.
+
+    SIGALRM only works from the main thread on Unix. TestClient, threadpool
+    execution, and some ASGI/container setups may call this function outside the
+    main thread. In that case, fall back to a direct call instead of raising
+    `ValueError: signal only works in main thread`.
+    """
     try:
         import signal
-        if hasattr(signal, "SIGALRM"):
+        import threading
+
+        if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
             def _handler(signum, frame):
                 raise _TimeoutError("Scan exceeded time limit")
+
+            previous_handler = signal.getsignal(signal.SIGALRM)
             signal.signal(signal.SIGALRM, _handler)
             signal.alarm(seconds)
             try:
-                result = fn(*args, **kwargs)
+                return fn(*args, **kwargs)
             finally:
                 signal.alarm(0)
-            return result
-        else:
-            return fn(*args, **kwargs)
+                signal.signal(signal.SIGALRM, previous_handler)
+
+        return fn(*args, **kwargs)
     except _TimeoutError:
         raise
 
