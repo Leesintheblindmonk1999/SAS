@@ -271,6 +271,42 @@ def _source_target_invariance_guard(text_a: str, text_b: str) -> dict[str, Any]:
     }
 
 
+def _sync_manipulation_alert(report, module_state: dict[str, Any]) -> dict[str, Any]:
+    """
+    Build manipulation_alert from the core report and synchronize it with
+    post-core API guards such as SourceTargetGuard.
+
+    Without this, the API can return MANIFOLD_RUPTURE while manipulation_alert
+    remains false because the alert was built before module_state was applied.
+    """
+    manipulation_alert = build_manipulation_alert_from_report(report)
+
+    if not isinstance(manipulation_alert, dict):
+        manipulation_alert = {
+            "triggered": False,
+            "sources": [],
+            "details": {},
+        }
+
+    source_target_guard = module_state.get("source_target_guard") or {}
+    final_isi = float(module_state.get("isi_final", 1.0))
+
+    if final_isi < KAPPA_D or source_target_guard.get("triggered"):
+        manipulation_alert["triggered"] = True
+
+        sources = manipulation_alert.get("sources") or []
+        if source_target_guard.get("triggered") and "SourceTargetGuard" not in sources:
+            sources.append("SourceTargetGuard")
+
+        manipulation_alert["sources"] = sources
+        manipulation_alert.setdefault("details", {})
+
+        if source_target_guard:
+            manipulation_alert["details"]["source_target_guard"] = source_target_guard
+
+    return manipulation_alert
+
+
 _MODULE_RUNNERS = {
     "E9": detect_logical_contradiction,
     "E10": detect_fact_grounding,
@@ -515,11 +551,13 @@ def _run_audit_core(
         enable_modules,
     )
 
+    manipulation_alert = _sync_manipulation_alert(report, module_state)
+
     return {
         "manifold_score": module_state["isi_final"],
         "verdict": module_state["verdict"],
         "confidence": module_state["confidence"],
-        "manipulation_alert": build_manipulation_alert_from_report(report),
+        "manipulation_alert": manipulation_alert,
         "evidence": _build_evidence(report, module_state),
     }
 
@@ -609,11 +647,13 @@ def run_diff(
             enable_modules,
         )
 
+        manipulation_alert = _sync_manipulation_alert(report, module_state)
+
         result = {
             "manifold_score": module_state["isi_final"],
             "isi": module_state["isi_final"],
             "verdict": module_state["verdict"],
-            "manipulation_alert": build_manipulation_alert_from_report(report),
+            "manipulation_alert": manipulation_alert,
             "confidence": module_state["confidence"],
             "evidence": _build_evidence(report, module_state),
             "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
