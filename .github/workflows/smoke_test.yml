@@ -14,7 +14,7 @@ jobs:
   smoke-test:
     name: Production API Health Check
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
 
     env:
       SAS_BASE_URL: https://sas-api.onrender.com
@@ -33,7 +33,7 @@ jobs:
           set -e
 
           echo "Waking up API..."
-          for i in $(seq 1 12); do
+          for i in $(seq 1 18); do
             code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$SAS_BASE_URL/health" || true)
 
             echo "Attempt $i -> HTTP $code"
@@ -52,15 +52,24 @@ jobs:
           cat /tmp/health.json || true
           exit 1
 
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "Waiting for Render deployment to stabilize..."
+          sleep 45
+
       - name: Check /health
         run: |
           set -e
 
-          response=$(curl -sS "$SAS_BASE_URL/health")
-          echo "$response" | jq .
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$SAS_BASE_URL/health" || true)
 
-          status=$(echo "$response" | jq -r '.status')
-          kappa=$(echo "$response" | jq -r '.kappa_d')
+          echo "HTTP $code"
+          cat /tmp/health.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/health.json | jq -r '.status')
+          kappa=$(cat /tmp/health.json | jq -r '.kappa_d')
 
           test "$status" = "ok"
           test "$kappa" != "null"
@@ -69,43 +78,117 @@ jobs:
         run: |
           set -e
 
-          response=$(curl -sS "$SAS_BASE_URL/readyz")
-          echo "$response" | jq .
+          code=$(curl -sS -o /tmp/readyz.json -w "%{http_code}" "$SAS_BASE_URL/readyz" || true)
 
-          status=$(echo "$response" | jq -r '.status')
+          echo "HTTP $code"
+          cat /tmp/readyz.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/readyz.json | jq -r '.status')
           test "$status" = "ready"
 
-          echo "$response" | jq -e '.routers.public_demo == true'
-          echo "$response" | jq -e '.routers.public_request_key == true'
-          echo "$response" | jq -e '.routers.whoami == true'
-          echo "$response" | jq -e '.routers.billing == true'
-          echo "$response" | jq -e '.routers.diff == true'
-          echo "$response" | jq -e '.routers.audit == true'
+          cat /tmp/readyz.json | jq -e '.routers.public_demo == true'
+          cat /tmp/readyz.json | jq -e '.routers.public_request_key == true'
+          cat /tmp/readyz.json | jq -e '.routers.whoami == true'
+          cat /tmp/readyz.json | jq -e '.routers.billing == true'
+          cat /tmp/readyz.json | jq -e '.routers.diff == true'
+          cat /tmp/readyz.json | jq -e '.routers.audit == true'
+
+      - name: Check /robots.txt
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/robots.txt -w "%{http_code}" "$SAS_BASE_URL/robots.txt" || true)
+
+          echo "HTTP $code"
+          cat /tmp/robots.txt
+
+          test "$code" = "200"
+          grep -q "User-agent: \*" /tmp/robots.txt
+          grep -q "Disallow: /public/request-key" /tmp/robots.txt
+
+      - name: Check HEAD /
+        run: |
+          set -e
+
+          code=$(curl -sS -I -o /tmp/head.txt -w "%{http_code}" "$SAS_BASE_URL/" || true)
+
+          echo "HTTP $code"
+          cat /tmp/head.txt
+
+          test "$code" = "200"
 
       - name: Check public stats
         run: |
           set -e
 
-          response=$(curl -sS "$SAS_BASE_URL/public/stats")
-          echo "$response" | jq .
+          code=$(curl -sS -o /tmp/stats.json -w "%{http_code}" "$SAS_BASE_URL/public/stats" || true)
 
-          status=$(echo "$response" | jq -r '.status')
+          echo "HTTP $code"
+          cat /tmp/stats.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/stats.json | jq -r '.status')
           test "$status" = "ok"
 
-          echo "$response" | jq -e '.privacy.raw_ips_exposed == false'
-          echo "$response" | jq -e '.privacy.api_keys_exposed == false'
+          cat /tmp/stats.json | jq -e '.privacy.raw_ips_exposed == false'
+          cat /tmp/stats.json | jq -e '.privacy.api_keys_exposed == false'
 
       - name: Check public activity
         run: |
           set -e
 
-          response=$(curl -sS "$SAS_BASE_URL/public/activity?limit=5")
-          echo "$response" | jq .
+          code=$(curl -sS -o /tmp/activity.json -w "%{http_code}" "$SAS_BASE_URL/public/activity?limit=5" || true)
 
-          status=$(echo "$response" | jq -r '.status')
+          echo "HTTP $code"
+          cat /tmp/activity.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/activity.json | jq -r '.status')
           test "$status" = "ok"
 
-      - name: Check public demo endpoint
+      - name: Check public request-key GET onboarding
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/request_key_help.json -w "%{http_code}" "$SAS_BASE_URL/public/request-key" || true)
+
+          echo "HTTP $code"
+          cat /tmp/request_key_help.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/request_key_help.json | jq -r '.status')
+          message=$(cat /tmp/request_key_help.json | jq -r '.message')
+          cli=$(cat /tmp/request_key_help.json | jq -r '.recommended.cli.command')
+
+          test "$status" = "info"
+          echo "$message" | grep -q "POST /public/request-key"
+          echo "$cli" | grep -q "sas request-key"
+
+      - name: Check public demo GET onboarding
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/demo_help.json -w "%{http_code}" "$SAS_BASE_URL/public/demo/audit" || true)
+
+          echo "HTTP $code"
+          cat /tmp/demo_help.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/demo_help.json | jq -r '.status')
+          message=$(cat /tmp/demo_help.json | jq -r '.message')
+          cli=$(cat /tmp/demo_help.json | jq -r '.recommended.cli.command')
+
+          test "$status" = "info"
+          echo "$message" | grep -q "POST /public/demo/audit"
+          echo "$cli" | grep -q "sas demo-audit"
+
+      - name: Check public demo POST endpoint
         run: |
           set -e
 
@@ -114,63 +197,102 @@ jobs:
             "response": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
           }'
 
-          response=$(curl -sS -X POST "$SAS_BASE_URL/public/demo/audit" \
+          code=$(curl -sS -o /tmp/demo.json -w "%{http_code}" -X POST "$SAS_BASE_URL/public/demo/audit" \
             -H "Content-Type: application/json" \
-            -d "$payload")
+            -d "$payload" || true)
 
-          echo "$response" | jq .
+          echo "HTTP $code"
+          cat /tmp/demo.json | jq .
 
-          status=$(echo "$response" | jq -r '.status')
-          isi=$(echo "$response" | jq -r '.isi')
-          verdict=$(echo "$response" | jq -r '.verdict')
+          if [ "$code" = "429" ]; then
+            echo "::warning::Public demo endpoint is rate-limited. Skipping strict demo assertion."
+            exit 0
+          fi
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/demo.json | jq -r '.status')
+          isi=$(cat /tmp/demo.json | jq -r '.isi')
+          verdict=$(cat /tmp/demo.json | jq -r '.verdict')
 
           test "$status" = "ok"
           test "$isi" != "null"
           test "$verdict" != "null"
+
+      - name: Check public validation error
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/validation.json -w "%{http_code}" -X POST "$SAS_BASE_URL/public/request-key" \
+            -H "Content-Type: application/json" \
+            -d '{}' || true)
+
+          echo "HTTP $code"
+          cat /tmp/validation.json | jq .
+
+          test "$code" = "422"
+
+          error=$(cat /tmp/validation.json | jq -r '.error')
+          example=$(cat /tmp/validation.json | jq -r '.examples.request_key.path')
+
+          test "$error" = "Validation error"
+          test "$example" = "/public/request-key"
 
       - name: Check protected /v1/whoami
         if: env.SAS_API_KEY != ''
         run: |
           set -e
 
-          response=$(curl -sS "$SAS_BASE_URL/v1/whoami" \
-            -H "X-API-Key: $SAS_API_KEY")
+          code=$(curl -sS -o /tmp/whoami.json -w "%{http_code}" "$SAS_BASE_URL/v1/whoami" \
+            -H "X-API-Key: $SAS_API_KEY" || true)
 
-          echo "$response" | jq .
+          echo "HTTP $code"
+          cat /tmp/whoami.json | jq .
 
-          status=$(echo "$response" | jq -r '.status')
-          active=$(echo "$response" | jq -r '.active')
-          plan=$(echo "$response" | jq -r '.plan')
+          test "$code" = "200"
+
+          status=$(cat /tmp/whoami.json | jq -r '.status')
+          active=$(cat /tmp/whoami.json | jq -r '.active')
+          plan=$(cat /tmp/whoami.json | jq -r '.plan')
+          allowed=$(cat /tmp/whoami.json | jq -r '.quota_allowed // true')
 
           test "$status" = "ok"
           test "$active" = "true"
           test "$plan" != "null"
+          test "$allowed" = "true"
 
-      - name: Check protected /v1/diff
+      - name: Check protected /v1/diff SourceTargetGuard
         if: env.SAS_API_KEY != ''
         run: |
           set -e
 
           payload='{
-            "text_a": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
-            "text_b": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950.",
+            "text_a": "The Eiffel Tower is located in Paris, France. It was built in 1889. It is one of the most recognized landmarks in France.",
+            "text_b": "The Eiffel Tower is located in Berlin, Germany. It was built in 1950. It is one of the most recognized landmarks in Germany.",
             "experimental": true
           }'
 
-          response=$(curl -sS -X POST "$SAS_BASE_URL/v1/diff" \
+          code=$(curl -sS -o /tmp/diff.json -w "%{http_code}" -X POST "$SAS_BASE_URL/v1/diff" \
             -H "Content-Type: application/json" \
             -H "X-API-Key: $SAS_API_KEY" \
-            -d "$payload")
+            -d "$payload" || true)
 
-          echo "$response" | jq .
+          echo "HTTP $code"
+          cat /tmp/diff.json | jq .
 
-          isi=$(echo "$response" | jq -r '.isi')
-          verdict=$(echo "$response" | jq -r '.verdict')
+          test "$code" = "200"
+
+          isi=$(cat /tmp/diff.json | jq -r '.isi')
+          verdict=$(cat /tmp/diff.json | jq -r '.verdict')
+          alert=$(cat /tmp/diff.json | jq -r '.manipulation_alert.triggered // false')
+          sources=$(cat /tmp/diff.json | jq -r '.manipulation_alert.sources | join(",")')
 
           test "$isi" != "null"
-          test "$verdict" != "null"
+          test "$verdict" = "MANIFOLD_RUPTURE"
+          test "$alert" = "true"
+          echo "$sources" | grep -q "SourceTargetGuard"
 
       - name: Warn if SAS_API_KEY is missing
         if: env.SAS_API_KEY == ''
         run: |
-          echo "::warning::SAS_API_KEY secret is missing. Protected endpoint checks were skipped."
+          echo "::warning::SAS_SMOKE_API_KEY secret is missing. Protected endpoint checks were skipped."
