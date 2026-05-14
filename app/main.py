@@ -43,6 +43,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.db.auth_store import init_auth_db
@@ -282,6 +283,86 @@ def _check_sqlite_db(path: str | None, required_table: str | None = None) -> boo
         return False
 
 
+
+# ==============================================================================
+# PAYLOAD SIZE LIMIT MIDDLEWARE
+# ==============================================================================
+
+
+class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Reject oversized request bodies before they reach routers or detector logic.
+
+    This is a first-line application-layer defense against accidental or abusive
+    large payloads. It relies on Content-Length, which is not a complete DDoS
+    solution, but it blocks the common case early and cheaply.
+
+    Limits are intentionally conservative for public endpoints.
+    """
+
+    LIMITS_BY_PREFIX: dict[str, int] = {
+        "/public/request-key": 2 * 1024,          # 2 KB: email + name only
+        "/public/demo/audit": 8 * 1024,           # 8 KB: public demo
+        "/v1/chat": 25 * 1024,                    # 25 KB
+        "/v1/audit": 50 * 1024,                   # 50 KB
+        "/v1/diff": 100 * 1024,                   # 100 KB general cap
+        "/admin": 10 * 1024,                      # 10 KB
+        "/billing": 100 * 1024,                   # 100 KB provider webhooks
+    }
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        method = request.method.upper()
+
+        # GET/HEAD/OPTIONS normally have no meaningful request body.
+        if method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+
+        limit = self._limit_for_path(path)
+        if limit is None:
+            return await call_next(request)
+
+        content_length = request.headers.get("content-length")
+
+        if content_length:
+            try:
+                size = int(content_length)
+            except ValueError:
+                size = 0
+
+            if size > limit:
+                request_id = getattr(request.state, "request_id", "unknown")
+
+                logger.warning(
+                    "payload_too_large request_id=%s method=%s path=%s size=%s limit=%s",
+                    request_id,
+                    method,
+                    path,
+                    size,
+                    limit,
+                )
+
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "error": "Payload too large",
+                        "message": "Request body exceeds the allowed size for this endpoint.",
+                        "path": path,
+                        "limit_bytes": limit,
+                        "received_bytes": size,
+                        "request_id": request_id,
+                    },
+                )
+
+        return await call_next(request)
+
+    @classmethod
+    def _limit_for_path(cls, path: str) -> int | None:
+        for prefix, limit in cls.LIMITS_BY_PREFIX.items():
+            if path.startswith(prefix):
+                return limit
+        return None
+
 # ==============================================================================
 # REQUEST MONITORING MIDDLEWARE
 # ==============================================================================
@@ -380,9 +461,13 @@ app = FastAPI(
 async def startup_databases():
     # Ensure /app/data exists on Render and any containerized deployment.
     # SQLite will fail silently if the directory doesn't exist.
-    data_dir = Path(settings.auth_db_path).parent
+    auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
+    metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
+
+    data_dir = Path(auth_db_path).parent
     data_dir.mkdir(parents=True, exist_ok=True)
-    metrics_dir = Path(settings.metrics_db_path).parent
+
+    metrics_dir = Path(metrics_db_path).parent
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
     init_metrics_db()
@@ -405,6 +490,8 @@ async def startup_databases():
 
 app.middleware("http")(api_key_auth_middleware)
 app.middleware("http")(request_monitoring_middleware)
+
+app.add_middleware(PayloadSizeLimitMiddleware)
 
 if HAS_SECURITY and SecurityHeadersMiddleware:
     app.add_middleware(SecurityHeadersMiddleware)
