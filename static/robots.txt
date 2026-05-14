@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /v1
+Disallow: /billing
+Disallow: /public/request-key
