@@ -13,7 +13,7 @@ Production improvements:
 - Protected debug endpoint
 - No full header exposure
 - /readyz readiness endpoint
-- Configurable CORS
+- Configurable CORS (HEAD included)
 - Strong root and integrity endpoints
 - Admin-only /v1/metrics endpoint
 - Public anonymized activity endpoints
@@ -22,6 +22,10 @@ Production improvements:
 - Plan-aware API key authentication
 - Polar checkout/webhook
 - Mercado Pago Checkout Pro + webhook
+- robots.txt with Cache-Control
+- HEAD / for uptime monitors
+- RequestValidationError handler (422 with examples)
+- /app/data directory auto-creation for Render
 """
 
 from __future__ import annotations
@@ -31,9 +35,11 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -76,7 +82,6 @@ logger = logging.getLogger(__name__)
 
 try:
     from app.middleware.security_headers import SecurityHeadersMiddleware
-
     HAS_SECURITY = True
 except ImportError:
     HAS_SECURITY = False
@@ -98,37 +103,33 @@ try:
         from app.routers.chat import router as chat_router
     except ImportError:
         from app.routers.chat_router import router as chat_router
-
     HAS_CHAT = True
 except ImportError:
     HAS_CHAT = False
     chat_router = None
-    logger.warning("Chat router not found. Expected app/routers/chat.py or app/routers/chat_router.py")
+    logger.warning("Chat router not found.")
 
 try:
     try:
         from app.routers.audit_conversation import router as audit_conversation_router
     except ImportError:
         from app.routers.audit_conversation_router import router as audit_conversation_router
-
     HAS_AUDIT_CONVERSATION = True
 except ImportError:
     HAS_AUDIT_CONVERSATION = False
     audit_conversation_router = None
-    logger.warning("Audit conversation router not found")
+    logger.warning("Audit conversation router not found.")
 
 try:
     from app.routers.status import router as status_router
-
     HAS_STATUS = True
 except ImportError:
     HAS_STATUS = False
     status_router = None
-    logger.warning("Status router not found")
+    logger.warning("Status router not found.")
 
 try:
     from app.routers.metrics import router as metrics_router
-
     HAS_METRICS = True
 except ImportError:
     HAS_METRICS = False
@@ -137,57 +138,51 @@ except ImportError:
 
 try:
     from app.routers.public_activity import router as public_activity_router
-
     HAS_PUBLIC_ACTIVITY = True
 except ImportError:
     HAS_PUBLIC_ACTIVITY = False
     public_activity_router = None
-    logger.info("Public activity router not found. Optional public activity disabled.")
+    logger.info("Public activity router not found.")
 
 try:
     from app.routers.public_demo import router as public_demo_router
-
     HAS_PUBLIC_DEMO = True
 except ImportError:
     HAS_PUBLIC_DEMO = False
     public_demo_router = None
-    logger.info("Public demo router not found. Optional public demo disabled.")
+    logger.info("Public demo router not found.")
 
 try:
     from app.routers.public_request_key import router as public_request_key_router
-
     HAS_PUBLIC_REQUEST_KEY = True
 except ImportError:
     HAS_PUBLIC_REQUEST_KEY = False
     public_request_key_router = None
-    logger.info("Public request-key router not found. Optional self-service keys disabled.")
+    logger.info("Public request-key router not found.")
 
 try:
     from app.routers.whoami import router as whoami_router
-
     HAS_WHOAMI = True
 except ImportError:
     HAS_WHOAMI = False
     whoami_router = None
-    logger.info("Whoami router not found. Optional API identity disabled.")
+    logger.info("Whoami router not found.")
 
 try:
     from app.routers.billing import router as billing_router
-
     HAS_BILLING = True
 except ImportError:
     HAS_BILLING = False
     billing_router = None
-    logger.info("Billing router not found. Optional Polar billing disabled.")
+    logger.info("Billing router not found. Polar billing disabled.")
 
 try:
     from app.routers.mercadopago_billing import router as mercadopago_billing_router
-
     HAS_MERCADOPAGO_BILLING = True
 except ImportError:
     HAS_MERCADOPAGO_BILLING = False
     mercadopago_billing_router = None
-    logger.info("Mercado Pago billing router not found. Optional Mercado Pago billing disabled.")
+    logger.info("Mercado Pago billing router not found.")
 
 # ==============================================================================
 # OPTIONAL EXTERNAL AUDIT + NOTARIZATION ROUTERS
@@ -196,24 +191,22 @@ except ImportError:
 if settings.enable_external_audit:
     try:
         from app.routers.external_audit_router import router as external_audit_router
-
         HAS_EXTERNAL_AUDIT = True
     except ImportError:
         HAS_EXTERNAL_AUDIT = False
         external_audit_router = None
-        logger.info("External audit router not found. Optional module disabled.")
+        logger.info("External audit router not found.")
 else:
     HAS_EXTERNAL_AUDIT = False
     external_audit_router = None
 
 try:
     from app.routers.notarization_router import router as notarization_router
-
     HAS_NOTARIZATION = True
 except ImportError:
     HAS_NOTARIZATION = False
     notarization_router = None
-    logger.info("Notarization router not found. Optional module disabled.")
+    logger.info("Notarization router not found.")
 
 # ==============================================================================
 # MONITORING HELPERS
@@ -237,18 +230,8 @@ def _hash_ip(ip: str) -> str:
 
 def _safe_header_snapshot(request: Request) -> dict[str, str]:
     """Return only non-sensitive diagnostic headers."""
-    allowed = {
-        "user-agent",
-        "x-forwarded-for",
-        "cf-ipcountry",
-        "cf-ray",
-        "host",
-    }
-    return {
-        key: value
-        for key, value in request.headers.items()
-        if key.lower() in allowed
-    }
+    allowed = {"user-agent", "x-forwarded-for", "cf-ipcountry", "cf-ray", "host"}
+    return {k: v for k, v in request.headers.items() if k.lower() in allowed}
 
 
 # ==============================================================================
@@ -260,13 +243,10 @@ async def request_monitoring_middleware(request: Request, call_next):
     """
     Professional request observability middleware.
 
-    Adds:
-    - X-Request-ID
-    - X-Process-Time
-    - X-Trace-Timestamp
-    - X-Monitoring-Node
+    Adds X-Request-ID, X-Process-Time, X-Trace-Timestamp, X-Monitoring-Node.
+    Records aggregate metrics without storing raw IPs or raw API keys.
 
-    Also records aggregate metrics without storing raw IPs or raw API keys.
+    Registered FIRST so request_id is always available when auth middleware runs.
     """
     start_time = time.time()
     request_id = str(uuid.uuid4())
@@ -283,12 +263,7 @@ async def request_monitoring_middleware(request: Request, call_next):
     except Exception as exc:
         logger.error(
             "request_failed request_id=%s country=%s ip_hash=%s method=%s path=%s error=%s",
-            request_id,
-            country,
-            ip_hash,
-            method,
-            path,
-            str(exc),
+            request_id, country, ip_hash, method, path, str(exc),
             exc_info=True,
         )
         raise
@@ -297,13 +272,7 @@ async def request_monitoring_middleware(request: Request, call_next):
 
     logger.info(
         "request request_id=%s country=%s ip_hash=%s method=%s path=%s status=%s time=%.4f",
-        request_id,
-        country,
-        ip_hash,
-        method,
-        path,
-        response.status_code,
-        process_time,
+        request_id, country, ip_hash, method, path, response.status_code, process_time,
     )
 
     try:
@@ -321,8 +290,7 @@ async def request_monitoring_middleware(request: Request, call_next):
     except Exception as metrics_error:
         logger.warning(
             "metrics_record_failed request_id=%s error=%s",
-            request_id,
-            str(metrics_error),
+            request_id, str(metrics_error),
         )
 
     response.headers["X-Request-ID"] = request_id
@@ -356,14 +324,36 @@ app = FastAPI(
 )
 
 
+# ==============================================================================
+# STARTUP
+# ==============================================================================
+
 @app.on_event("startup")
 async def startup_databases():
+    # Ensure /app/data exists on Render and any containerized deployment.
+    # SQLite will fail silently if the directory doesn't exist.
+    data_dir = Path(settings.auth_db_path).parent
+    data_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir = Path(settings.metrics_db_path).parent
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
     init_metrics_db()
     init_auth_db()
+
     deleted = purge_old_metrics()
     if deleted:
         logger.info("metrics_retention deleted_rows=%s", deleted)
 
+    logger.info("startup_complete service=%s version=%s", SAS_NAME, SAS_VERSION)
+
+
+# ==============================================================================
+# MIDDLEWARE REGISTRATION
+# FastAPI/Starlette execute the LAST registered HTTP middleware FIRST (outermost).
+# Register api_key_auth first and request_monitoring last.
+# → request_monitoring executes first (outermost) → sets request_id
+# → api_key_auth executes second → request_id is always available if auth fails
+# ==============================================================================
 
 app.middleware("http")(api_key_auth_middleware)
 app.middleware("http")(request_monitoring_middleware)
@@ -374,7 +364,8 @@ if HAS_SECURITY and SecurityHeadersMiddleware:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["POST", "GET", "OPTIONS"],
+    # HEAD included for uptime monitors and crawlers.
+    allow_methods=["POST", "GET", "HEAD", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -423,9 +414,45 @@ if HAS_EXTERNAL_AUDIT and external_audit_router:
 if HAS_NOTARIZATION and notarization_router:
     app.include_router(notarization_router, tags=["Notarization"])
 
+
 # ==============================================================================
 # PUBLIC SYSTEM ENDPOINTS
 # ==============================================================================
+
+
+@app.get("/robots.txt", tags=["System"], include_in_schema=False)
+async def robots_txt() -> Response:
+    """
+    Crawler guidance.
+    /admin and /billing are excluded from indexing.
+    /v1 endpoints are API-only and excluded from web crawlers.
+    /public/request-key is excluded — it triggers email/key generation flows
+    and has no value for indexing. Rate-limited server-side regardless.
+    This is not a security measure — it is crawler etiquette.
+    """
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /v1\n"
+        "Disallow: /billing\n"
+        "Disallow: /public/request-key\n"
+    )
+    return Response(
+        content=content,
+        media_type="text/plain",
+        # Cache for 1 hour — reduces repeated hits from crawlers.
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.head("/", tags=["System"], include_in_schema=False)
+async def head_root() -> Response:
+    """
+    HEAD / for uptime monitors (UptimeRobot, Render health checks, etc.).
+    Returns 200 with no body. Avoids false 405 errors in logs.
+    """
+    return Response(status_code=200)
 
 
 @app.get("/", tags=["System"])
@@ -443,28 +470,27 @@ async def root() -> dict[str, Any]:
         "sas_doi": SAS_DOI,
         "omni_scanner_doi": OMNI_DOI,
         "ledger_hash": LEDGER_HASH,
+        # Benchmark note: conservative presentation for external audiences.
+        # Full methodology, dataset and replication details: see DOI and README.
         "benchmark": {
             "pairs": 2000,
-            "accuracy": "98.80%",
-            "precision": "100.00%",
-            "recall": "97.60%",
-            "f1_score": "98.79%",
-            "false_positives": 0,
+            "status": "documented",
+            "note": "See repository and DOI for methodology and replication details.",
+            "doi": SAS_DOI,
         },
         "message": "Structural coherence audit API for generative AI outputs.",
         "endpoints": {
             "health": "/health",
             "readiness": "/readyz",
+            "integrity": "/integrity",
             "audit": "/v1/audit",
             "diff": "/v1/diff",
             "chat": "/v1/chat",
-            "status": "/v1/status",
-            "integrity": "/integrity",
+            "whoami": "/v1/whoami",
             "public_stats": "/public/stats",
             "public_activity": "/public/activity",
             "public_demo": "/public/demo/audit",
             "request_key": "/public/request-key",
-            "whoami": "/v1/whoami",
             "polar_checkout": "/billing/polar/checkout",
             "polar_webhook": "/billing/polar/webhook",
             "mercadopago_checkout": "/billing/mercadopago/checkout",
@@ -510,8 +536,8 @@ async def readyz() -> dict[str, Any]:
             "public_demo": HAS_PUBLIC_DEMO,
             "public_request_key": HAS_PUBLIC_REQUEST_KEY,
             "whoami": HAS_WHOAMI,
-            "billing": HAS_BILLING,
-            "mercadopago_billing": HAS_MERCADOPAGO_BILLING,
+            "billing_polar": HAS_BILLING,
+            "billing_mercadopago": HAS_MERCADOPAGO_BILLING,
             "chat": HAS_CHAT,
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
@@ -527,27 +553,17 @@ async def readyz() -> dict[str, Any]:
 
 
 @app.get("/v1/debug/whoami", tags=["Debug"], include_in_schema=False)
-async def whoami(
+async def debug_whoami(
     request: Request,
     x_admin_secret: str | None = Header(default=None, alias="X-Admin-Secret"),
 ) -> dict[str, Any]:
-    """
-    Protected diagnostics endpoint.
-
-    Requirements:
-    - settings.enable_debug_endpoints = True
-    - valid X-Admin-Secret header
-
-    This endpoint intentionally does not return all request headers.
-    """
+    """Protected diagnostics. Requires enable_debug_endpoints=True + valid admin secret."""
     if not settings.enable_debug_endpoints:
         raise HTTPException(status_code=404, detail="Not found")
-
     if not settings.admin_secret or x_admin_secret != settings.admin_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     client_ip = _client_ip(request)
-
     return {
         "your_ip": client_ip,
         "your_ip_hash": _hash_ip(client_ip),
@@ -559,13 +575,87 @@ async def whoami(
 
 
 # ==============================================================================
-# GLOBAL ERROR HANDLER
+# ERROR HANDLERS
 # ==============================================================================
+
+
+def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
+    """
+    Sanitize validation errors before returning to client.
+    Strips raw input values that could expose sensitive data (emails, payloads, etc.)
+    Only returns: location, message type, and human-readable message.
+    """
+    return [
+        {
+            "loc": err.get("loc"),
+            "msg": err.get("msg"),
+            "type": err.get("type"),
+        }
+        for err in exc.errors()
+    ]
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    """
+    422 Validation errors with helpful examples for public endpoints.
+    Makes /public/request-key and /public/demo/audit errors actionable.
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+    safe_errors = _safe_validation_errors(exc)
+
+    logger.info(
+        "validation_error request_id=%s path=%s errors=%s",
+        request_id,
+        request.url.path,
+        safe_errors,
+    )
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation error",
+            "message": "Invalid request body or parameters.",
+            "details": safe_errors,
+            "request_id": request_id,
+            "examples": {
+                "request_key": {
+                    "method": "POST",
+                    "path": "/public/request-key",
+                    "json": {
+                        "email": "you@example.com",
+                        "name": "Your Name",
+                    },
+                },
+                "demo_audit": {
+                    "method": "POST",
+                    "path": "/public/demo/audit",
+                    "json": {
+                        "source": "The Eiffel Tower is located in Paris, France.",
+                        "response": "The Eiffel Tower is located in Berlin, Germany.",
+                    },
+                },
+                "diff": {
+                    "method": "POST",
+                    "path": "/v1/diff",
+                    "headers": {"X-API-Key": "sas_your_key_here"},
+                    "json": {
+                        "text_a": "The Eiffel Tower is in Paris.",
+                        "text_b": "The Eiffel Tower is in Berlin.",
+                        "experimental": True,
+                    },
+                },
+            },
+        },
+    )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Global exception handler that avoids exposing internals."""
+    """Global exception handler — avoids exposing internals."""
     request_id = getattr(request.state, "request_id", "unknown")
 
     logger.error(
