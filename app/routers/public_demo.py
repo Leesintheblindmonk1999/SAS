@@ -2,6 +2,7 @@
 app/routers/public_demo.py - SAS Public Demo Endpoint
 =====================================================
 
+GET  /public/demo/audit - onboarding/help for browsers and accidental GETs.
 POST /public/demo/audit - no API key required.
 
 Uses run_diff(text_a, text_b), the same forensic comparison engine used by /v1/diff.
@@ -16,7 +17,7 @@ Security:
 - IP is hashed before logging
 - Simple in-memory rate limit by IP hash
 - No stack traces in API responses
-- Max 2000 chars per field
+- Max 2000 chars per field by default
 
 Registry: TAD EX-2026-18792778
 Author: Gonzalo Emir Durante
@@ -82,10 +83,18 @@ def _check_rate(ip_hash: str) -> None:
         if int(entry.get("count", 0)) >= PUBLIC_DEMO_LIMIT_PER_DAY:
             raise HTTPException(
                 status_code=429,
-                detail=(
-                    f"Demo limit reached ({PUBLIC_DEMO_LIMIT_PER_DAY} requests/day per IP). "
-                    "Get a Free API key to continue."
-                ),
+                detail={
+                    "error": "Demo rate limit exceeded",
+                    "message": (
+                        f"Demo limit reached ({PUBLIC_DEMO_LIMIT_PER_DAY} requests/day per IP). "
+                        "Request a Free API key to continue."
+                    ),
+                    "free_key": {
+                        "cli": 'sas request-key --email you@example.com --name "Your Name"',
+                        "endpoint": "POST /public/request-key",
+                        "url": "https://sas-api.onrender.com/public/request-key",
+                    },
+                },
             )
 
         entry["count"] = int(entry.get("count", 0)) + 1
@@ -310,9 +319,82 @@ class DemoResponse(BaseModel):
     demo: bool = True
 
 
+class DemoHelpResponse(BaseModel):
+    status: str
+    message: str
+    recommended: dict[str, Any]
+    example_body: dict[str, str]
+    expected_signal: dict[str, Any]
+    next_steps: list[str]
+    docs: dict[str, str]
+
+
 # ==============================================================================
-# ENDPOINT
+# ENDPOINTS
 # ==============================================================================
+
+
+@router.get(
+    "/public/demo/audit",
+    response_model=DemoHelpResponse,
+    tags=["Public"],
+    summary="How to use the public SAS demo audit",
+    include_in_schema=False,
+)
+async def public_demo_audit_help() -> DemoHelpResponse:
+    """
+    Human-friendly help for users/browsers that open /public/demo/audit with GET.
+
+    The real demo endpoint is POST /public/demo/audit.
+    This converts accidental 405s into onboarding instructions.
+    """
+    source = "The Eiffel Tower is located in Paris, France, and was built in 1889."
+    response = "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+
+    return DemoHelpResponse(
+        status="info",
+        message="Use POST /public/demo/audit with source and response fields.",
+        recommended={
+            "cli": {
+                "install": "pip install sas-client",
+                "command": f'sas demo-audit "{source}" "{response}"',
+            },
+            "curl": (
+                "curl -X POST https://sas-api.onrender.com/public/demo/audit "
+                "-H 'Content-Type: application/json' "
+                f"-d '{{\"source\":\"{source}\",\"response\":\"{response}\"}}'"
+            ),
+            "powershell": (
+                'Invoke-RestMethod -Method Post '
+                '-Uri "https://sas-api.onrender.com/public/demo/audit" '
+                '-ContentType "application/json" '
+                f"-Body '{{\"source\":\"{source}\",\"response\":\"{response}\"}}'"
+            ),
+        },
+        example_body={
+            "source": source,
+            "response": response,
+        },
+        expected_signal={
+            "kappa_d": float(getattr(settings, "kappa_d", 0.56)),
+            "note": (
+                "The public demo returns a simplified response. "
+                "Use /v1/diff with an API key for the full forensic response."
+            ),
+        },
+        next_steps=[
+            "Try the no-key demo with: sas demo-audit \"source\" \"response\"",
+            'Request a Free key with: sas request-key --email you@example.com --name "Your Name"',
+            "Set SAS_API_KEY or SAS_KEY with the key received by email.",
+            'Run authenticated diff with: sas diff "source" "response"',
+        ],
+        docs={
+            "api": "https://sas-api.onrender.com/docs",
+            "landing_demo": "https://leesintheblindmonk1999.github.io/sas-landing/#demo",
+            "pypi": "https://pypi.org/project/sas-client/",
+            "github": "https://github.com/Leesintheblindmonk1999/SAS",
+        },
+    )
 
 
 @router.post(
@@ -339,13 +421,27 @@ async def public_demo_audit(payload: DemoRequest, request: Request) -> DemoRespo
     if len(source) < 10 or len(response) < 10:
         raise HTTPException(
             status_code=422,
-            detail="Both source and response must contain at least 10 non-empty characters.",
+            detail={
+                "error": "Invalid demo payload",
+                "message": "Both source and response must contain at least 10 non-empty characters.",
+                "example": {
+                    "source": "The Eiffel Tower is located in Paris, France.",
+                    "response": "The Eiffel Tower is located in Berlin, Germany.",
+                },
+            },
         )
 
     if len(source) > PUBLIC_DEMO_MAX_CHARS or len(response) > PUBLIC_DEMO_MAX_CHARS:
         raise HTTPException(
             status_code=413,
-            detail=f"Maximum length exceeded. Limit: {PUBLIC_DEMO_MAX_CHARS} characters per field.",
+            detail={
+                "error": "Payload too large",
+                "message": f"Maximum length exceeded. Limit: {PUBLIC_DEMO_MAX_CHARS} characters per field.",
+                "free_key": {
+                    "cli": 'sas request-key --email you@example.com --name "Your Name"',
+                    "endpoint": "POST /public/request-key",
+                },
+            },
         )
 
     client_ip = _client_ip(request)
@@ -378,7 +474,10 @@ async def public_demo_audit(payload: DemoRequest, request: Request) -> DemoRespo
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal analysis error. No text was stored.",
+            detail={
+                "error": "Internal analysis error",
+                "message": "Internal analysis error. No text was stored.",
+            },
         )
 
     latency_ms = round((time.perf_counter() - t0) * 1000, 2)
