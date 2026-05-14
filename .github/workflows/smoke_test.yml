@@ -95,6 +95,8 @@ jobs:
           cat /tmp/readyz.json | jq -e '.routers.billing_mercadopago == true'
           cat /tmp/readyz.json | jq -e '.routers.diff == true'
           cat /tmp/readyz.json | jq -e '.routers.audit == true'
+          cat /tmp/readyz.json | jq -e '.databases.auth_db == true'
+          cat /tmp/readyz.json | jq -e '.databases.metrics_db == true'
 
       - name: Check /robots.txt
         run: |
