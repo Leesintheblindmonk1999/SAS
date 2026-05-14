@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import sqlite3
 import time
 import uuid
 from datetime import datetime, timezone
@@ -232,6 +233,53 @@ def _safe_header_snapshot(request: Request) -> dict[str, str]:
     """Return only non-sensitive diagnostic headers."""
     allowed = {"user-agent", "x-forwarded-for", "cf-ipcountry", "cf-ray", "host"}
     return {k: v for k, v in request.headers.items() if k.lower() in allowed}
+
+
+
+def _check_sqlite_db(path: str | None, required_table: str | None = None) -> bool:
+    """
+    Minimal SQLite readiness check.
+
+    Returns True only if:
+    - the path is configured;
+    - the parent directory exists or can be created;
+    - SQLite can open the database;
+    - SELECT 1 succeeds;
+    - required_table exists, when provided.
+
+    This does not expose DB paths or internal errors to clients.
+    """
+    if not path:
+        return False
+
+    try:
+        db_path = Path(path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        try:
+            conn.execute("SELECT 1")
+
+            if required_table:
+                row = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (required_table,),
+                ).fetchone()
+                if row is None:
+                    logger.warning("sqlite_readiness_missing_table table=%s", required_table)
+                    return False
+
+            return True
+        finally:
+            conn.close()
+
+    except Exception as exc:
+        logger.warning(
+            "sqlite_readiness_check_failed table=%s error=%s",
+            required_table or "none",
+            str(exc),
+        )
+        return False
 
 
 # ==============================================================================
@@ -520,30 +568,55 @@ async def integrity() -> dict[str, Any]:
 
 @app.get("/readyz", tags=["System"])
 async def readyz() -> dict[str, Any]:
-    """Granular readiness endpoint for Render and orchestrators."""
+    """
+    Granular readiness endpoint for Render and orchestrators.
+
+    Checks:
+    - routers imported correctly;
+    - auth SQLite database can be opened and contains the users table;
+    - metrics SQLite database can be opened and contains api_request_metrics.
+
+    The endpoint does not expose DB paths, table contents, raw errors, or secrets.
+    """
+    routers = {
+        "health": True,
+        "audit": True,
+        "diff": True,
+        "admin": True,
+        "metrics": HAS_METRICS,
+        "public_activity": HAS_PUBLIC_ACTIVITY,
+        "public_demo": HAS_PUBLIC_DEMO,
+        "public_request_key": HAS_PUBLIC_REQUEST_KEY,
+        "whoami": HAS_WHOAMI,
+        "billing_polar": HAS_BILLING,
+        "billing_mercadopago": HAS_MERCADOPAGO_BILLING,
+        "chat": HAS_CHAT,
+        "audit_conversation": HAS_AUDIT_CONVERSATION,
+        "status": HAS_STATUS,
+        "external_audit": HAS_EXTERNAL_AUDIT,
+        "notarization": HAS_NOTARIZATION,
+    }
+
+    databases = {
+        "auth_db": _check_sqlite_db(
+            str(getattr(settings, "auth_db_path", "/app/data/auth.db")),
+            required_table="users",
+        ),
+        "metrics_db": _check_sqlite_db(
+            str(getattr(settings, "metrics_db_path", "/app/data/metrics.db")),
+            required_table="api_request_metrics",
+        ),
+    }
+
+    ready = all(databases.values())
+
     return {
-        "status": "ready",
+        "status": "ready" if ready else "degraded",
         "service": SAS_NAME,
         "version": SAS_VERSION,
         "kappa_d": KAPPA_D,
-        "routers": {
-            "health": True,
-            "audit": True,
-            "diff": True,
-            "admin": True,
-            "metrics": HAS_METRICS,
-            "public_activity": HAS_PUBLIC_ACTIVITY,
-            "public_demo": HAS_PUBLIC_DEMO,
-            "public_request_key": HAS_PUBLIC_REQUEST_KEY,
-            "whoami": HAS_WHOAMI,
-            "billing_polar": HAS_BILLING,
-            "billing_mercadopago": HAS_MERCADOPAGO_BILLING,
-            "chat": HAS_CHAT,
-            "audit_conversation": HAS_AUDIT_CONVERSATION,
-            "status": HAS_STATUS,
-            "external_audit": HAS_EXTERNAL_AUDIT,
-            "notarization": HAS_NOTARIZATION,
-        },
+        "routers": routers,
+        "databases": databases,
     }
 
 
