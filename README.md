@@ -514,8 +514,33 @@ Documented benchmark summary:
 
 Run benchmark:
 
+
+### Benchmark runner
+
+`tests/benchmark_runner.py` supports multiple benchmark suites. Use `--suite` to choose the evaluation mode.
+
+| Suite | Command | Use case |
+|---|---|---|
+| Built-in regression | `python tests/benchmark_runner.py --suite regression --api-url https://sas-api.onrender.com` | Quick sanity check without external corpus |
+| Quick corpus sample | `python tests/benchmark_runner.py --suite quick --corpus ./benchmark_corpus --limit 50` | Fast HaluEval/TruthfulQA sample |
+| Halogen QA | `python tests/benchmark_runner.py --suite halogen_qa --corpus ./benchmark_corpus --limit 100` | QA-focused evaluation |
+| All standard suites | `python tests/benchmark_runner.py --suite all --corpus ./benchmark_corpus --limit 500` | Broader benchmark excluding Halogen by default |
+| Halogen only | `python tests/benchmark_runner.py --suite halogen --corpus ./benchmark_corpus --limit 100` | Heavy benchmark, opt-in only |
+| Custom folder | `python tests/benchmark_runner.py --suite custom --custom-dir ./my_pairs` | Local `*_A_clean.txt` / `*_B_hallucination.txt` pairs |
+| Custom JSONL | `python tests/benchmark_runner.py --suite custom --jsonl ./dataset.jsonl` | Custom dataset with `text_a`, `text_b`, `label` |
+
+Useful options:
+
 ```bash
-python tests/benchmark_runner.py
+python tests/benchmark_runner.py --suite regression \
+  --api-url https://sas-api.onrender.com \
+  --output docs/benchmark_regression_latest.json
+
+python tests/benchmark_runner.py --suite quick \
+  --corpus ./benchmark_corpus \
+  --limit 100 \
+  --fail-under-accuracy 0.90 \
+  --fail-under-recall 0.90
 ```
 
 ---
