@@ -57,6 +57,68 @@ Readiness check:
 curl https://sas-api.onrender.com/readyz
 ```
 
+Crawler guidance:
+
+```bash
+curl https://sas-api.onrender.com/robots.txt
+```
+
+---
+
+## Live Operational Snapshot
+
+SAS exposes public aggregate operational metrics for transparency and monitoring.
+
+Public metrics:
+
+```bash
+curl https://sas-api.onrender.com/public/stats
+```
+
+Recent anonymized activity:
+
+```bash
+curl "https://sas-api.onrender.com/public/activity?limit=10"
+```
+
+Using the official CLI:
+
+```bash
+sas public-stats
+sas public-activity --limit 10
+```
+
+Public metric endpoints expose only aggregate/anonymized activity.
+
+They do **not** expose:
+
+- raw IP addresses;
+- raw API keys;
+- API key hashes;
+- request IDs;
+- private request bodies;
+- user emails.
+
+Example signals tracked internally and/or publicly in aggregate form:
+
+| Signal | Meaning |
+|---|---|
+| Product requests | Non-infrastructure API usage |
+| Successful requests | 2xx responses |
+| Client errors | 4xx responses |
+| Server errors | 5xx responses |
+| Unique anonymized users | Approximate unique traffic buckets |
+| Country buckets | Coarse country-level distribution |
+| Public activity | Method, path, status bucket, country, and time bucket |
+
+Infrastructure traffic such as `/health`, `/readyz`, `HEAD /`, and `/robots.txt` should be interpreted separately from product usage.
+
+For deeper local analysis, use the funnel report:
+
+```bash
+python scripts/funnel_report.py
+```
+
 ---
 
 ## Fastest start: terminal onboarding
@@ -340,7 +402,8 @@ SAS/
 │   ├── db/                       # SQLite auth, usage, payments, metrics
 │   └── middleware/               # security headers, auth/rate-limit middleware
 ├── core/                         # semantic diff / low-level core components
-├── docs/                         # architecture, benchmark, OTS proof
+├── docs/                         # architecture, benchmark, OTS proof, API docs
+├── scripts/                      # operational scripts such as funnel_report.py
 ├── tests/                        # test suite and benchmark runner
 ├── .github/workflows/            # smoke tests and automation
 ├── Dockerfile
@@ -461,6 +524,11 @@ python tests/benchmark_runner.py
 
 | Document | Description |
 |---|---|
+| [Manifold Model](docs/manifold.md) | ISI, κD, TDA, NIG, SourceTargetGuard, E9-E12 and interpretation |
+| [API Documentation](docs/api.md) | Hosted endpoints, CLI, auth, errors and examples |
+| [Billing](docs/billing.md) | Hosted plans, Free/Pro flow, Polar, Mercado Pago, quotas |
+| [Benchmark](docs/benchmark.md) | Benchmark interpretation, limitations, regression cases, replication guidance |
+| [Security Notes](docs/security.md) | API keys, privacy, validation, rate limits, payload limits, billing security |
 | [Security Policy](SECURITY.md) | Vulnerability reporting and responsible disclosure |
 | [Contributing Guide](CONTRIBUTING.md) | Development setup, pull requests, testing, contribution rules |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards |
@@ -468,12 +536,6 @@ python tests/benchmark_runner.py
 | [Benchmark JSON](docs/benchmark_complete_20260429_172647.json) | Full benchmark output |
 | [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | OpenTimestamps proof |
 | [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
-
-Recommended next technical doc:
-
-```text
-docs/manifold.md
-```
 
 ---
 
@@ -535,7 +597,7 @@ Do not commit `.env` files.
 - `robots.txt` is crawler guidance, not a security boundary.
 - Admin and debug endpoints must remain protected.
 
-For vulnerability reports, see [SECURITY.md](SECURITY.md).
+For vulnerability reports, see [SECURITY.md](SECURITY.md) and [docs/security.md](docs/security.md).
 
 ---
 
@@ -558,10 +620,9 @@ Known limitations:
 
 ### Before broad public launch
 
-- GitHub Release `v1.1.0` with changelog.
 - End-to-end user flow test: demo -> request key -> email -> whoami -> diff.
 - `/readyz` database checks for auth and metrics SQLite.
-- Funnel report script separating infrastructure traffic from product traffic.
+- `scripts/funnel_report.py` for separating infrastructure traffic from product traffic and analyzing the funnel from docs/demo to request-key/diff/checkout.
 - Tests for `robots.txt`, `HEAD /`, validation errors, auth failures, SourceTargetGuard, and legacy quota.
 
 ### Near-term
@@ -569,7 +630,6 @@ Known limitations:
 - SQLite-backed persistent rate limiting.
 - Payload size limits by plan.
 - Better webhook idempotency and failure handling.
-- `docs/manifold.md`.
 - Mini benchmark suite for v1.1.x/v1.2.x.
 
 ### Product expansion
