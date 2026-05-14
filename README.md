@@ -523,7 +523,7 @@ Run benchmark:
 |---|---|---|
 | Built-in regression | `python tests/benchmark_runner.py --suite regression --api-url https://sas-api.onrender.com` | Quick sanity check without external corpus |
 | Quick corpus sample | `python tests/benchmark_runner.py --suite quick --corpus ./benchmark_corpus --limit 50` | Fast HaluEval/TruthfulQA sample |
-| Halogen QA | `python tests/benchmark_runner.py --suite halogen_qa --corpus ./benchmark_corpus --limit 100` | QA-focused evaluation |
+| Halogen | `python tests/benchmark_runner.py --suite halogen --corpus ./benchmark_corpus --limit 100` | focused evaluation |
 | All standard suites | `python tests/benchmark_runner.py --suite all --corpus ./benchmark_corpus --limit 500` | Broader benchmark excluding Halogen by default |
 | Halogen only | `python tests/benchmark_runner.py --suite halogen --corpus ./benchmark_corpus --limit 100` | Heavy benchmark, opt-in only |
 | Custom folder | `python tests/benchmark_runner.py --suite custom --custom-dir ./my_pairs` | Local `*_A_clean.txt` / `*_B_hallucination.txt` pairs |
