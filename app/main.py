@@ -12,7 +12,7 @@ Production improvements:
 - Request ID tracing via request.state
 - Protected debug endpoint
 - No full header exposure
-- /readyz readiness endpoint
+- /readyz readiness endpoint with real SQLite checks
 - Configurable CORS (HEAD included)
 - Strong root and integrity endpoints
 - Admin-only /v1/metrics endpoint
@@ -24,8 +24,9 @@ Production improvements:
 - Mercado Pago Checkout Pro + webhook
 - robots.txt with Cache-Control
 - HEAD / for uptime monitors
-- RequestValidationError handler (422 with examples)
+- RequestValidationError handler (422 with fix commands per endpoint)
 - /app/data directory auto-creation for Render
+- PayloadSizeLimitMiddleware registered as outermost middleware
 """
 
 from __future__ import annotations
@@ -236,7 +237,6 @@ def _safe_header_snapshot(request: Request) -> dict[str, str]:
     return {k: v for k, v in request.headers.items() if k.lower() in allowed}
 
 
-
 def _check_sqlite_db(path: str | None, required_table: str | None = None) -> bool:
     """
     Minimal SQLite readiness check.
@@ -246,21 +246,18 @@ def _check_sqlite_db(path: str | None, required_table: str | None = None) -> boo
     - the parent directory exists or can be created;
     - SQLite can open the database;
     - SELECT 1 succeeds;
-    - required_table exists, when provided.
+    - required_table exists in sqlite_master, when provided.
 
-    This does not expose DB paths or internal errors to clients.
+    Does not expose DB paths or internal errors to clients.
     """
     if not path:
         return False
-
     try:
         db_path = Path(path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-
         conn = sqlite3.connect(str(db_path), timeout=2)
         try:
             conn.execute("SELECT 1")
-
             if required_table:
                 row = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
@@ -269,11 +266,9 @@ def _check_sqlite_db(path: str | None, required_table: str | None = None) -> boo
                 if row is None:
                     logger.warning("sqlite_readiness_missing_table table=%s", required_table)
                     return False
-
             return True
         finally:
             conn.close()
-
     except Exception as exc:
         logger.warning(
             "sqlite_readiness_check_failed table=%s error=%s",
@@ -281,7 +276,6 @@ def _check_sqlite_db(path: str | None, required_table: str | None = None) -> boo
             str(exc),
         )
         return False
-
 
 
 # ==============================================================================
@@ -293,21 +287,24 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
     """
     Reject oversized request bodies before they reach routers or detector logic.
 
-    This is a first-line application-layer defense against accidental or abusive
-    large payloads. It relies on Content-Length, which is not a complete DDoS
-    solution, but it blocks the common case early and cheaply.
+    Registered as the OUTERMOST middleware (first add_middleware call) so it
+    cuts large payloads before CORS, security headers, auth, and monitoring
+    even run. This is intentional: we want to abort expensive requests as early
+    as possible.
 
-    Limits are intentionally conservative for public endpoints.
+    Note: relies on Content-Length header. If Content-Length is absent or
+    spoofed, this check is bypassed — it is application-layer defense, not a
+    complete DDoS solution. Combine with infrastructure-level limits on Render.
     """
 
     LIMITS_BY_PREFIX: dict[str, int] = {
-        "/public/request-key": 2 * 1024,          # 2 KB: email + name only
-        "/public/demo/audit": 8 * 1024,           # 8 KB: public demo
-        "/v1/chat": 25 * 1024,                    # 25 KB
-        "/v1/audit": 50 * 1024,                   # 50 KB
-        "/v1/diff": 100 * 1024,                   # 100 KB general cap
-        "/admin": 10 * 1024,                      # 10 KB
-        "/billing": 100 * 1024,                   # 100 KB provider webhooks
+        "/public/request-key": 2 * 1024,       # 2 KB — email + name only
+        "/public/demo/audit": 8 * 1024,         # 8 KB — public demo
+        "/v1/chat": 25 * 1024,                  # 25 KB
+        "/v1/audit": 50 * 1024,                 # 50 KB
+        "/v1/diff": 100 * 1024,                 # 100 KB — general cap
+        "/admin": 10 * 1024,                    # 10 KB
+        "/billing": 100 * 1024,                 # 100 KB — provider webhooks
     }
 
     async def dispatch(self, request: Request, call_next):
@@ -323,7 +320,6 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         content_length = request.headers.get("content-length")
-
         if content_length:
             try:
                 size = int(content_length)
@@ -331,17 +327,13 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
                 size = 0
 
             if size > limit:
+                # request_id may be "unknown" here since request_monitoring
+                # runs after this middleware. Acceptable — 413 is a clear signal.
                 request_id = getattr(request.state, "request_id", "unknown")
-
                 logger.warning(
                     "payload_too_large request_id=%s method=%s path=%s size=%s limit=%s",
-                    request_id,
-                    method,
-                    path,
-                    size,
-                    limit,
+                    request_id, method, path, size, limit,
                 )
-
                 return JSONResponse(
                     status_code=413,
                     content={
@@ -363,6 +355,7 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
                 return limit
         return None
 
+
 # ==============================================================================
 # REQUEST MONITORING MIDDLEWARE
 # ==============================================================================
@@ -375,7 +368,9 @@ async def request_monitoring_middleware(request: Request, call_next):
     Adds X-Request-ID, X-Process-Time, X-Trace-Timestamp, X-Monitoring-Node.
     Records aggregate metrics without storing raw IPs or raw API keys.
 
-    Registered FIRST so request_id is always available when auth middleware runs.
+    Registered LAST via app.middleware("http") so it executes FIRST (outermost
+    among the http-middleware group), ensuring request_id is always set before
+    api_key_auth runs.
     """
     start_time = time.time()
     request_id = str(uuid.uuid4())
@@ -459,16 +454,16 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_databases():
-    # Ensure /app/data exists on Render and any containerized deployment.
-    # SQLite will fail silently if the directory doesn't exist.
+    """
+    Ensure data directories exist and initialize databases.
+    Creates /app/data on Render and any containerized deployment
+    before SQLite tries to write — avoids silent startup failures.
+    """
     auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
 
-    data_dir = Path(auth_db_path).parent
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    metrics_dir = Path(metrics_db_path).parent
-    metrics_dir.mkdir(parents=True, exist_ok=True)
+    Path(auth_db_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(metrics_db_path).parent.mkdir(parents=True, exist_ok=True)
 
     init_metrics_db()
     init_auth_db()
@@ -481,11 +476,24 @@ async def startup_databases():
 
 
 # ==============================================================================
-# MIDDLEWARE REGISTRATION
-# FastAPI/Starlette execute the LAST registered HTTP middleware FIRST (outermost).
-# Register api_key_auth first and request_monitoring last.
-# → request_monitoring executes first (outermost) → sets request_id
-# → api_key_auth executes second → request_id is always available if auth fails
+# MIDDLEWARE REGISTRATION — ORDER MATTERS
+#
+# Starlette/FastAPI execute middlewares as an onion:
+# the LAST registered is the OUTERMOST and executes FIRST.
+#
+# Desired execution order (outermost → innermost):
+#   1. CORSMiddleware          — handles preflight before anything else
+#   2. SecurityHeadersMiddleware — adds security headers
+#   3. PayloadSizeLimitMiddleware — cuts oversized bodies early
+#   4. request_monitoring      — assigns request_id, logs, records metrics
+#   5. api_key_auth            — validates API key (has request_id available)
+#
+# Registration order (reverse of execution):
+#   app.middleware("http")(api_key_auth_middleware)      ← innermost
+#   app.middleware("http")(request_monitoring_middleware) ← outermost of http group
+#   app.add_middleware(PayloadSizeLimitMiddleware)        ← before CORS/security
+#   app.add_middleware(SecurityHeadersMiddleware)
+#   app.add_middleware(CORSMiddleware)                   ← outermost of all
 # ==============================================================================
 
 app.middleware("http")(api_key_auth_middleware)
@@ -499,7 +507,6 @@ if HAS_SECURITY and SecurityHeadersMiddleware:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    # HEAD included for uptime monitors and crawlers.
     allow_methods=["POST", "GET", "HEAD", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -558,12 +565,9 @@ if HAS_NOTARIZATION and notarization_router:
 @app.get("/robots.txt", tags=["System"], include_in_schema=False)
 async def robots_txt() -> Response:
     """
-    Crawler guidance.
-    /admin and /billing are excluded from indexing.
-    /v1 endpoints are API-only and excluded from web crawlers.
-    /public/request-key is excluded — it triggers email/key generation flows
-    and has no value for indexing. Rate-limited server-side regardless.
-    This is not a security measure — it is crawler etiquette.
+    Crawler guidance — not a security boundary.
+    /admin, /v1, /billing excluded from indexing.
+    /public/request-key excluded — triggers email/key flow, no indexing value.
     """
     content = (
         "User-agent: *\n"
@@ -576,17 +580,13 @@ async def robots_txt() -> Response:
     return Response(
         content=content,
         media_type="text/plain",
-        # Cache for 1 hour — reduces repeated hits from crawlers.
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
 
 @app.head("/", tags=["System"], include_in_schema=False)
 async def head_root() -> Response:
-    """
-    HEAD / for uptime monitors (UptimeRobot, Render health checks, etc.).
-    Returns 200 with no body. Avoids false 405 errors in logs.
-    """
+    """HEAD / for uptime monitors. Returns 200, no body. Avoids 405 in logs."""
     return Response(status_code=200)
 
 
@@ -605,8 +605,6 @@ async def root() -> dict[str, Any]:
         "sas_doi": SAS_DOI,
         "omni_scanner_doi": OMNI_DOI,
         "ledger_hash": LEDGER_HASH,
-        # Benchmark note: conservative presentation for external audiences.
-        # Full methodology, dataset and replication details: see DOI and README.
         "benchmark": {
             "pairs": 2000,
             "status": "documented",
@@ -659,40 +657,19 @@ async def readyz() -> dict[str, Any]:
     Granular readiness endpoint for Render and orchestrators.
 
     Checks:
-    - routers imported correctly;
-    - auth SQLite database can be opened and contains the users table;
-    - metrics SQLite database can be opened and contains api_request_metrics.
+    - all routers imported correctly;
+    - auth SQLite readable and contains the users table;
+    - metrics SQLite readable and contains api_request_metrics table.
 
-    The endpoint does not expose DB paths, table contents, raw errors, or secrets.
+    Returns "ready" only when both databases pass.
+    Does not expose DB paths, table contents, raw errors, or secrets.
     """
-    routers = {
-        "health": True,
-        "audit": True,
-        "diff": True,
-        "admin": True,
-        "metrics": HAS_METRICS,
-        "public_activity": HAS_PUBLIC_ACTIVITY,
-        "public_demo": HAS_PUBLIC_DEMO,
-        "public_request_key": HAS_PUBLIC_REQUEST_KEY,
-        "whoami": HAS_WHOAMI,
-        "billing_polar": HAS_BILLING,
-        "billing_mercadopago": HAS_MERCADOPAGO_BILLING,
-        "chat": HAS_CHAT,
-        "audit_conversation": HAS_AUDIT_CONVERSATION,
-        "status": HAS_STATUS,
-        "external_audit": HAS_EXTERNAL_AUDIT,
-        "notarization": HAS_NOTARIZATION,
-    }
+    auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
+    metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
 
     databases = {
-        "auth_db": _check_sqlite_db(
-            str(getattr(settings, "auth_db_path", "/app/data/auth.db")),
-            required_table="users",
-        ),
-        "metrics_db": _check_sqlite_db(
-            str(getattr(settings, "metrics_db_path", "/app/data/metrics.db")),
-            required_table="api_request_metrics",
-        ),
+        "auth_db": _check_sqlite_db(auth_db_path, required_table="users"),
+        "metrics_db": _check_sqlite_db(metrics_db_path, required_table="api_request_metrics"),
     }
 
     ready = all(databases.values())
@@ -702,8 +679,25 @@ async def readyz() -> dict[str, Any]:
         "service": SAS_NAME,
         "version": SAS_VERSION,
         "kappa_d": KAPPA_D,
-        "routers": routers,
         "databases": databases,
+        "routers": {
+            "health": True,
+            "audit": True,
+            "diff": True,
+            "admin": True,
+            "metrics": HAS_METRICS,
+            "public_activity": HAS_PUBLIC_ACTIVITY,
+            "public_demo": HAS_PUBLIC_DEMO,
+            "public_request_key": HAS_PUBLIC_REQUEST_KEY,
+            "whoami": HAS_WHOAMI,
+            "billing_polar": HAS_BILLING,
+            "billing_mercadopago": HAS_MERCADOPAGO_BILLING,
+            "chat": HAS_CHAT,
+            "audit_conversation": HAS_AUDIT_CONVERSATION,
+            "status": HAS_STATUS,
+            "external_audit": HAS_EXTERNAL_AUDIT,
+            "notarization": HAS_NOTARIZATION,
+        },
     }
 
 
@@ -741,9 +735,9 @@ async def debug_whoami(
 
 def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
     """
-    Sanitize validation errors before returning to client.
-    Strips raw input values that could expose sensitive data (emails, payloads, etc.)
-    Only returns: location, message type, and human-readable message.
+    Sanitize validation errors — strip raw input values to avoid leaking
+    sensitive data (emails, large payloads, etc.) in error responses.
+    Returns only: field location, error type, human-readable message.
     """
     return [
         {
@@ -761,68 +755,134 @@ async def validation_exception_handler(
     exc: RequestValidationError,
 ) -> JSONResponse:
     """
-    422 Validation errors with helpful examples for public endpoints.
-    Makes /public/request-key and /public/demo/audit errors actionable.
+    422 Validation errors with actionable fix commands per endpoint.
+    Converts cryptic Pydantic errors into onboarding instructions.
     """
     request_id = getattr(request.state, "request_id", "unknown")
     safe_errors = _safe_validation_errors(exc)
+    path = request.url.path
 
     logger.info(
         "validation_error request_id=%s path=%s errors=%s",
-        request_id,
-        request.url.path,
-        safe_errors,
+        request_id, path, safe_errors,
     )
 
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "Validation error",
-            "message": "Invalid request body or parameters.",
-            "details": safe_errors,
-            "request_id": request_id,
-            "examples": {
-                "request_key": {
-                    "method": "POST",
-                    "path": "/public/request-key",
-                    "json": {
-                        "email": "you@example.com",
-                        "name": "Your Name",
-                    },
-                },
-                "demo_audit": {
-                    "method": "POST",
-                    "path": "/public/demo/audit",
-                    "json": {
-                        "source": "The Eiffel Tower is located in Paris, France.",
-                        "response": "The Eiffel Tower is located in Berlin, Germany.",
-                    },
-                },
-                "diff": {
-                    "method": "POST",
-                    "path": "/v1/diff",
-                    "headers": {"X-API-Key": "sas_your_key_here"},
-                    "json": {
-                        "text_a": "The Eiffel Tower is in Paris.",
-                        "text_b": "The Eiffel Tower is in Berlin.",
-                        "experimental": True,
-                    },
-                },
+    examples = {
+        "request_key": {
+            "method": "POST",
+            "path": "/public/request-key",
+            "json": {"email": "you@example.com", "name": "Your Name"},
+        },
+        "demo_audit": {
+            "method": "POST",
+            "path": "/public/demo/audit",
+            "json": {
+                "source": "The Eiffel Tower is located in Paris, France.",
+                "response": "The Eiffel Tower is located in Berlin, Germany.",
             },
         },
-    )
+        "diff": {
+            "method": "POST",
+            "path": "/v1/diff",
+            "headers": {"X-API-Key": "sas_your_key_here"},
+            "json": {
+                "text_a": "The Eiffel Tower is in Paris.",
+                "text_b": "The Eiffel Tower is in Berlin.",
+                "experimental": True,
+            },
+        },
+    }
+
+    fix: dict[str, Any] | None = None
+    message = "Invalid request body or parameters."
+
+    if path == "/public/request-key":
+        message = "Invalid request body. Expected JSON with required field 'email' and optional field 'name'."
+        fix = {
+            "cli": 'sas request-key --email you@example.com --name "Your Name"',
+            "curl": (
+                "curl -X POST https://sas-api.onrender.com/public/request-key "
+                "-H 'Content-Type: application/json' "
+                "-d '{\"email\":\"you@example.com\",\"name\":\"Your Name\"}'"
+            ),
+            "powershell": (
+                'Invoke-RestMethod -Method Post '
+                '-Uri "https://sas-api.onrender.com/public/request-key" '
+                '-ContentType "application/json" '
+                '-Body \'{"email":"you@example.com","name":"Your Name"}\''
+            ),
+            "required_json": {"email": "you@example.com", "name": "Your Name"},
+            "help": "GET https://sas-api.onrender.com/public/request-key",
+        }
+
+    elif path == "/public/demo/audit":
+        message = "Invalid request body. Expected JSON with required fields 'source' and 'response'."
+        fix = {
+            "cli": (
+                'sas demo-audit '
+                '"The Eiffel Tower is located in Paris, France." '
+                '"The Eiffel Tower is located in Berlin, Germany."'
+            ),
+            "curl": (
+                "curl -X POST https://sas-api.onrender.com/public/demo/audit "
+                "-H 'Content-Type: application/json' "
+                "-d '{\"source\":\"The Eiffel Tower is located in Paris, France.\","
+                "\"response\":\"The Eiffel Tower is located in Berlin, Germany.\"}'"
+            ),
+            "powershell": (
+                'Invoke-RestMethod -Method Post '
+                '-Uri "https://sas-api.onrender.com/public/demo/audit" '
+                '-ContentType "application/json" '
+                '-Body \'{"source":"The Eiffel Tower is located in Paris, France.",'
+                '"response":"The Eiffel Tower is located in Berlin, Germany."}\''
+            ),
+            "required_json": {
+                "source": "The Eiffel Tower is located in Paris, France.",
+                "response": "The Eiffel Tower is located in Berlin, Germany.",
+            },
+            "help": "GET https://sas-api.onrender.com/public/demo/audit",
+        }
+
+    elif path == "/v1/diff":
+        message = "Invalid request body. Expected JSON with 'text_a', 'text_b', and optional 'experimental'."
+        fix = {
+            "curl": (
+                "curl -X POST https://sas-api.onrender.com/v1/diff "
+                "-H 'Content-Type: application/json' "
+                "-H 'X-API-Key: sas_your_key_here' "
+                "-d '{\"text_a\":\"The Eiffel Tower is in Paris.\","
+                "\"text_b\":\"The Eiffel Tower is in Berlin.\","
+                "\"experimental\":true}'"
+            ),
+            "required_json": {
+                "text_a": "The Eiffel Tower is in Paris.",
+                "text_b": "The Eiffel Tower is in Berlin.",
+                "experimental": True,
+            },
+        }
+
+    content: dict[str, Any] = {
+        "error": "Validation error",
+        "message": message,
+        "details": safe_errors,
+        "request_id": request_id,
+        "examples": examples,
+    }
+
+    if fix is not None:
+        content["fix"] = fix
+
+    return JSONResponse(status_code=422, content=content)
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Global exception handler — avoids exposing internals."""
+    """Global exception handler — never exposes internals."""
     request_id = getattr(request.state, "request_id", "unknown")
 
     logger.error(
         "unhandled_exception request_id=%s path=%s error=%s",
-        request_id,
-        request.url.path,
-        str(exc),
+        request_id, request.url.path, str(exc),
         exc_info=True,
     )
 
