@@ -520,6 +520,12 @@ app.middleware("http")(request_monitoring_middleware)
 
 app.add_middleware(PayloadSizeLimitMiddleware)
 
+# Persistent sovereign audit log.
+# This middleware enqueues events into audit.db through app/services/audit_store.py.
+# It must be registered after request_monitoring_middleware exists in the stack,
+# so it can reuse request.state.request_id instead of generating a second ID.
+app.middleware("http")(audit_middleware)
+
 if HAS_SECURITY and SecurityHeadersMiddleware:
     app.add_middleware(SecurityHeadersMiddleware)
 
