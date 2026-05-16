@@ -97,6 +97,7 @@ jobs:
           cat /tmp/readyz.json | jq -e '.routers.audit == true'
           cat /tmp/readyz.json | jq -e '.databases.auth_db == true'
           cat /tmp/readyz.json | jq -e '.databases.metrics_db == true'
+          cat /tmp/readyz.json | jq -e '.databases.audit_db == true'
 
       - name: Check /robots.txt
         run: |
@@ -222,7 +223,7 @@ jobs:
           test "$isi" != "null"
           test "$verdict" != "null"
 
-      - name: Check public validation error
+      - name: Check public request-key validation error
         run: |
           set -e
 
@@ -236,10 +237,54 @@ jobs:
           test "$code" = "422"
 
           error=$(cat /tmp/validation.json | jq -r '.error')
-          example=$(cat /tmp/validation.json | jq -r '.examples.request_key.path')
+          reason=$(cat /tmp/validation.json | jq -r '.reason')
+          missing_email=$(cat /tmp/validation.json | jq -r '.missing_fields | index("email") != null')
+          required_email=$(cat /tmp/validation.json | jq -r '.required_format.email')
+          cli_fix=$(cat /tmp/validation.json | jq -r '.fix.cli')
 
           test "$error" = "Validation error"
-          test "$example" = "/public/request-key"
+          test "$reason" = "missing_email"
+          test "$missing_email" = "true"
+          echo "$required_email" | grep -q "required"
+          echo "$cli_fix" | grep -q "sas request-key"
+
+      - name: Check public request-key invalid email
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/invalid_email.json -w "%{http_code}" -X POST "$SAS_BASE_URL/public/request-key" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"bad-email","name":"Smoke Test"}' || true)
+
+          echo "HTTP $code"
+          cat /tmp/invalid_email.json | jq .
+
+          test "$code" = "422"
+
+          error=$(cat /tmp/invalid_email.json | jq -r '.error')
+          reason=$(cat /tmp/invalid_email.json | jq -r '.reason')
+          invalid_email=$(cat /tmp/invalid_email.json | jq -r '.invalid_fields | index("email") != null')
+
+          test "$error" = "Validation error"
+          test "$reason" = "invalid_email"
+          test "$invalid_email" = "true"
+
+      - name: Check public request-key query email guidance
+        run: |
+          set -e
+
+          code=$(curl -sS -o /tmp/query_email.json -w "%{http_code}" -X POST "$SAS_BASE_URL/public/request-key?email=test@example.com" || true)
+
+          echo "HTTP $code"
+          cat /tmp/query_email.json | jq .
+
+          test "$code" = "400"
+
+          reason=$(cat /tmp/query_email.json | jq -r '.reason')
+          cli_fix=$(cat /tmp/query_email.json | jq -r '.fix.cli')
+
+          test "$reason" = "email_in_query"
+          echo "$cli_fix" | grep -q "sas request-key"
 
       - name: Check protected /v1/whoami
         if: env.SAS_API_KEY != ''
