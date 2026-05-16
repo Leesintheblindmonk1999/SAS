@@ -26,6 +26,7 @@ from typing import Any
 
 DEFAULT_METRICS_DB = "/app/data/metrics.db"
 DEFAULT_AUTH_DB = "/app/data/auth.db"
+DEFAULT_AUDIT_DB = "/app/data/audit.db"
 
 INFRA_PATHS = {"/health", "/readyz", "/robots.txt"}
 DISCOVERY_PATHS = {"/", "/docs", "/openapi.json", "/integrity", "/public/stats", "/public/activity"}
@@ -465,6 +466,82 @@ def print_payments(conn: sqlite3.Connection | None, start_iso: str) -> tuple[lis
     return payments, summary
 
 
+
+def load_audit_summary(conn: sqlite3.Connection | None, start_iso: str) -> dict[str, Any]:
+    if conn is None or not table_exists(conn, "audit_events"):
+        return {"available": False, "reason": "audit_events table not found"}
+
+    data: dict[str, Any] = {"available": True}
+
+    total = rows(conn, "SELECT COUNT(*) AS count FROM audit_events WHERE ts_utc >= ?", (start_iso,))
+    data["total_events"] = int(total[0]["count"] if total else 0)
+
+    by_status = rows(conn, """
+        SELECT status_class, COUNT(*) AS count
+        FROM audit_events
+        WHERE ts_utc >= ?
+        GROUP BY status_class
+        ORDER BY count DESC
+    """, (start_iso,))
+    data["by_status_class"] = [dict(r) for r in by_status]
+
+    by_country = rows(conn, """
+        SELECT country, COUNT(*) AS count
+        FROM audit_events
+        WHERE ts_utc >= ?
+        GROUP BY country
+        ORDER BY count DESC
+        LIMIT 30
+    """, (start_iso,))
+    data["by_country"] = [dict(r) for r in by_country]
+
+    by_prefix = rows(conn, """
+        SELECT path_prefix, status_class, COUNT(*) AS count
+        FROM audit_events
+        WHERE ts_utc >= ?
+        GROUP BY path_prefix, status_class
+        ORDER BY count DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["by_path_prefix"] = [dict(r) for r in by_prefix]
+
+    recent_errors = rows(conn, """
+        SELECT ts_utc, country, method, path, status_code, status_class, request_id
+        FROM audit_events
+        WHERE ts_utc >= ? AND status_code >= 400
+        ORDER BY ts_utc DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["recent_errors"] = [dict(r) for r in recent_errors]
+
+    return data
+
+
+def print_audit_summary(summary: dict[str, Any], recent_limit: int) -> None:
+    print_section("PERSISTENT AUDIT DB")
+    if not summary.get("available"):
+        print(f"(not available: {summary.get('reason', 'unknown')})")
+        return
+
+    print(f"Total audit events:     {summary.get('total_events', 0)}")
+
+    print("\nSTATUS CLASS")
+    print_table(summary.get("by_status_class", []), ["status_class", "count"], 20)
+
+    print("\nCOUNTRIES")
+    print_table(summary.get("by_country", []), ["country", "count"], 30)
+
+    print("\nPATH PREFIX / STATUS")
+    print_table(summary.get("by_path_prefix", []), ["path_prefix", "status_class", "count"], 50)
+
+    print("\nRECENT AUDIT ERRORS")
+    print_table(
+        summary.get("recent_errors", [])[:recent_limit],
+        ["ts_utc", "country", "method", "path", "status_code", "status_class", "request_id"],
+        recent_limit,
+    )
+
+
 def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempts: list[dict[str, Any]]) -> list[str]:
     lines = []
     total = metrics.get("total_requests", 0) or 0
@@ -506,6 +583,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="SAS operational funnel report")
     parser.add_argument("--metrics-db", default=DEFAULT_METRICS_DB)
     parser.add_argument("--auth-db", default=DEFAULT_AUTH_DB)
+    parser.add_argument("--audit-db", default=DEFAULT_AUDIT_DB)
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--days", type=int, default=None)
     parser.add_argument("--show-recent", action="store_true")
@@ -527,9 +605,11 @@ def main() -> int:
     print(f"Start UTC:    {start_iso}")
     print(f"Metrics DB:   {args.metrics_db}")
     print(f"Auth DB:      {args.auth_db}")
+    print(f"Audit DB:     {args.audit_db}")
 
     metrics_conn = connect(args.metrics_db)
     auth_conn = connect(args.auth_db)
+    audit_conn = connect(args.audit_db)
 
     metrics_summary = {}
     if metrics_conn:
@@ -541,6 +621,8 @@ def main() -> int:
     attempts = print_request_key_attempts(auth_conn, start_iso)
     usage = print_api_usage(auth_conn, start_iso)
     payments, payment_summary = print_payments(auth_conn, start_iso)
+    audit_summary = load_audit_summary(audit_conn, start_iso)
+    print_audit_summary(audit_summary, args.recent_limit)
 
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
@@ -558,6 +640,7 @@ def main() -> int:
         "api_usage": usage,
         "payments": payments,
         "payment_summary": payment_summary,
+        "audit": audit_summary,
         "interpretation": notes,
     }
 
@@ -565,6 +648,8 @@ def main() -> int:
         metrics_conn.close()
     if auth_conn:
         auth_conn.close()
+    if audit_conn:
+        audit_conn.close()
 
     if args.json:
         print_section("JSON SUMMARY")
