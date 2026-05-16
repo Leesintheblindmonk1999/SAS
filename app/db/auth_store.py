@@ -201,6 +201,21 @@ def init_auth_db() -> None:
             """
         )
 
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS request_key_failed_attempts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at    TEXT NOT NULL,
+                ip_hash       TEXT,
+                reason        TEXT,
+                email_present INTEGER DEFAULT 0,
+                name_present  INTEGER DEFAULT 0,
+                status        TEXT DEFAULT 'failed_validation'
+            )
+            """
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS payments (
@@ -228,6 +243,8 @@ def init_auth_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_user_month ON api_usage(user_id, month)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_attempt_email_day ON request_key_attempts(email_hash, day)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_attempt_ip_day ON request_key_attempts(ip_hash, day)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_failed_attempt_ip ON request_key_failed_attempts(ip_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_failed_attempt_created ON request_key_failed_attempts(created_at)")
 
         _ensure_legacy_key(conn)
 
@@ -526,6 +543,105 @@ def create_or_rotate_key_for_email(email: str, name: str | None, ip_hash: str) -
         raise AuthStoreError("Failed to fetch user after key creation")
 
     return {"user": user, "api_key": raw_key}
+
+
+def _table_names(conn: sqlite3.Connection) -> set[str]:
+    return {
+        str(r["name"])
+        for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    try:
+        rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+        return {str(r["name"]) if "name" in r.keys() else str(r[1]) for r in rows}
+    except Exception:
+        return set()
+
+
+def register_failed_attempt(
+    ip_hash: str,
+    reason: str,
+    email_present: bool,
+    name_present: bool,
+) -> None:
+    """
+    Register failed /public/request-key validation attempts.
+
+    Stores no raw email and no request body.
+    Safe for funnel analysis.
+
+    Attempts to write into request_key_attempts when compatible.
+    Falls back to request_key_failed_attempts if the existing schema differs.
+    """
+    now = utc_now()
+
+    with connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS request_key_failed_attempts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at    TEXT NOT NULL,
+                ip_hash       TEXT,
+                reason        TEXT,
+                email_present INTEGER DEFAULT 0,
+                name_present  INTEGER DEFAULT 0,
+                status        TEXT DEFAULT 'failed_validation'
+            )
+            """
+        )
+
+        table_names = _table_names(conn)
+        columns_set = _table_columns(conn, "request_key_attempts")
+
+        candidate = {
+            "created_at": now,
+            "ts_utc": now,
+            "ip_hash": ip_hash,
+            "reason": reason,
+            "error_reason": reason,
+            "email_present": 1 if email_present else 0,
+            "name_present": 1 if name_present else 0,
+            "status": "failed_validation",
+            "success": 0,
+            "day": utc_day(),
+        }
+
+        insertable = [col for col in candidate.keys() if col in columns_set]
+
+        # Use request_key_attempts only if there are enough compatible columns.
+        # Current production schema requires email_hash NOT NULL, so fallback is
+        # expected unless the table has been expanded later.
+        if "request_key_attempts" in table_names and len(insertable) >= 3 and "email_hash" not in columns_set:
+            placeholders = ", ".join(["?"] * len(insertable))
+            col_sql = ", ".join(f'"{c}"' for c in insertable)
+            values = [candidate[c] for c in insertable]
+            conn.execute(
+                f'INSERT INTO request_key_attempts ({col_sql}) VALUES ({placeholders})',
+                values,
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO request_key_failed_attempts (
+                    created_at,
+                    ip_hash,
+                    reason,
+                    email_present,
+                    name_present,
+                    status
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    now,
+                    ip_hash,
+                    reason,
+                    1 if email_present else 0,
+                    1 if name_present else 0,
+                    "failed_validation",
+                ),
+            )
 
 
 def create_admin_key(is_premium: bool = False) -> str:
