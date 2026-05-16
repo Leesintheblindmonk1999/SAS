@@ -27,6 +27,7 @@ Production improvements:
 - RequestValidationError handler (422 with fix commands per endpoint)
 - /app/data directory auto-creation for Render
 - PayloadSizeLimitMiddleware registered as outermost middleware
+- Persistent non-blocking audit store (audit.db)
 """
 
 from __future__ import annotations
@@ -53,6 +54,13 @@ from app.services.metrics_store import (
     init_metrics_db,
     purge_old_metrics,
     record_request_metric,
+)
+
+from app.services.audit_store import (
+    audit_db_stats,
+    audit_middleware,
+    init_audit_db,
+    stop_writer,
 )
 
 # ==============================================================================
@@ -461,12 +469,15 @@ async def startup_databases():
     """
     auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
+    audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
 
     Path(auth_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(metrics_db_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(audit_db_path).parent.mkdir(parents=True, exist_ok=True)
 
     init_metrics_db()
     init_auth_db()
+    init_audit_db(audit_db_path)
 
     deleted = purge_old_metrics()
     if deleted:
@@ -475,6 +486,12 @@ async def startup_databases():
     logger.info("startup_complete service=%s version=%s", SAS_NAME, SAS_VERSION)
 
 
+
+@app.on_event("shutdown")
+async def shutdown_audit_store():
+    """Flush and stop the persistent audit writer."""
+    stop_writer()
+
 # ==============================================================================
 # MIDDLEWARE REGISTRATION — ORDER MATTERS
 #
@@ -482,18 +499,20 @@ async def startup_databases():
 # the LAST registered is the OUTERMOST and executes FIRST.
 #
 # Desired execution order (outermost → innermost):
-#   1. CORSMiddleware          — handles preflight before anything else
-#   2. SecurityHeadersMiddleware — adds security headers
-#   3. PayloadSizeLimitMiddleware — cuts oversized bodies early
-#   4. request_monitoring      — assigns request_id, logs, records metrics
-#   5. api_key_auth            — validates API key (has request_id available)
+#   1. CORSMiddleware             — handles preflight before anything else
+#   2. SecurityHeadersMiddleware  — adds security headers
+#   3. audit_middleware           — enqueues persistent audit events
+#   4. PayloadSizeLimitMiddleware — cuts oversized bodies early
+#   5. request_monitoring         — assigns request_id, logs, records metrics
+#   6. api_key_auth               — validates API key (has request_id available)
 #
 # Registration order (reverse of execution):
-#   app.middleware("http")(api_key_auth_middleware)      ← innermost
-#   app.middleware("http")(request_monitoring_middleware) ← outermost of http group
-#   app.add_middleware(PayloadSizeLimitMiddleware)        ← before CORS/security
+#   app.middleware("http")(api_key_auth_middleware)       ← innermost
+#   app.middleware("http")(request_monitoring_middleware)
+#   app.add_middleware(PayloadSizeLimitMiddleware)
+#   app.middleware("http")(audit_middleware)              ← wraps payload + monitoring
 #   app.add_middleware(SecurityHeadersMiddleware)
-#   app.add_middleware(CORSMiddleware)                   ← outermost of all
+#   app.add_middleware(CORSMiddleware)                    ← outermost of all
 # ==============================================================================
 
 app.middleware("http")(api_key_auth_middleware)
@@ -660,16 +679,20 @@ async def readyz() -> dict[str, Any]:
     - all routers imported correctly;
     - auth SQLite readable and contains the users table;
     - metrics SQLite readable and contains api_request_metrics table.
+    - audit SQLite readable and contains audit_events table.
 
-    Returns "ready" only when both databases pass.
+    Returns "ready" only when all databases pass.
     Does not expose DB paths, table contents, raw errors, or secrets.
     """
     auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
+    audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
+    audit_stats = audit_db_stats(audit_db_path)
 
     databases = {
         "auth_db": _check_sqlite_db(auth_db_path, required_table="users"),
         "metrics_db": _check_sqlite_db(metrics_db_path, required_table="api_request_metrics"),
+        "audit_db": bool(audit_stats.get("ok")),
     }
 
     ready = all(databases.values())
