@@ -47,6 +47,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.middleware.validation_logger import log_validation_error
 from app.config import settings
 from app.db.auth_store import init_auth_db
 from app.services.auth import api_key_auth_middleware
@@ -790,6 +791,8 @@ async def validation_exception_handler(
     request_id = getattr(request.state, "request_id", "unknown")
     safe_errors = _safe_validation_errors(exc)
     path = request.url.path
+
+    await log_validation_error(request, exc)
 
     logger.info(
         "validation_error request_id=%s path=%s errors=%s",
