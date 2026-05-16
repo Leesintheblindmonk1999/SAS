@@ -542,6 +542,118 @@ def print_audit_summary(summary: dict[str, Any], recent_limit: int) -> None:
     )
 
 
+def load_validation_errors_summary(conn: sqlite3.Connection | None, start_iso: str) -> dict[str, Any]:
+    if conn is None or not table_exists(conn, "validation_errors"):
+        return {"available": False, "reason": "validation_errors table not found"}
+
+    data: dict[str, Any] = {"available": True}
+
+    total = rows(conn, "SELECT COUNT(*) AS count FROM validation_errors WHERE ts_utc >= ?", (start_iso,))
+    data["total"] = int(total[0]["count"] if total else 0)
+
+    by_path = rows(conn, """
+        SELECT path, method, status, COUNT(*) AS count
+        FROM validation_errors
+        WHERE ts_utc >= ?
+        GROUP BY path, method, status
+        ORDER BY count DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["by_path_method"] = [dict(r) for r in by_path]
+
+    field_shape = rows(conn, """
+        SELECT
+            json_valid,
+            email_present,
+            email_valid,
+            name_present,
+            COUNT(*) AS count
+        FROM validation_errors
+        WHERE ts_utc >= ? AND path = '/public/request-key'
+        GROUP BY json_valid, email_present, email_valid, name_present
+        ORDER BY count DESC
+    """, (start_iso,))
+    data["request_key_field_shape"] = [dict(r) for r in field_shape]
+
+    by_types = rows(conn, """
+        SELECT validation_error_types, COUNT(*) AS count
+        FROM validation_errors
+        WHERE ts_utc >= ?
+        GROUP BY validation_error_types
+        ORDER BY count DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["by_validation_error_types"] = [dict(r) for r in by_types]
+
+    recent = rows(conn, """
+        SELECT
+            ts_utc,
+            country,
+            method,
+            path,
+            status,
+            content_type,
+            content_length,
+            json_valid,
+            email_present,
+            email_valid,
+            name_present,
+            validation_error_types,
+            ip_hash
+        FROM validation_errors
+        WHERE ts_utc >= ?
+        ORDER BY id DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["recent"] = [dict(r) for r in recent]
+
+    return data
+
+
+def print_validation_errors_summary(summary: dict[str, Any], recent_limit: int) -> None:
+    print_section("VALIDATION ERRORS (422)")
+
+    if not summary.get("available"):
+        print(f"(not available: {summary.get('reason', 'unknown')})")
+        return
+
+    print(f"Total validation errors: {summary.get('total', 0)}")
+
+    print("\nBY PATH / METHOD / STATUS")
+    print_table(summary.get("by_path_method", []), ["path", "method", "status", "count"], 50)
+
+    print("\nREQUEST-KEY FIELD SHAPE")
+    print_table(
+        summary.get("request_key_field_shape", []),
+        ["json_valid", "email_present", "email_valid", "name_present", "count"],
+        50,
+    )
+
+    print("\nBY VALIDATION ERROR TYPES")
+    print_table(summary.get("by_validation_error_types", []), ["validation_error_types", "count"], 50)
+
+    print("\nRECENT VALIDATION ERRORS")
+    print_table(
+        summary.get("recent", [])[:recent_limit],
+        [
+            "ts_utc",
+            "country",
+            "method",
+            "path",
+            "status",
+            "content_type",
+            "content_length",
+            "json_valid",
+            "email_present",
+            "email_valid",
+            "name_present",
+            "validation_error_types",
+            "ip_hash",
+        ],
+        recent_limit,
+    )
+
+
 def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempts: list[dict[str, Any]]) -> list[str]:
     lines = []
     total = metrics.get("total_requests", 0) or 0
@@ -624,6 +736,9 @@ def main() -> int:
     audit_summary = load_audit_summary(audit_conn, start_iso)
     print_audit_summary(audit_summary, args.recent_limit)
 
+    validation_summary = load_validation_errors_summary(audit_conn, start_iso)
+    print_validation_errors_summary(validation_summary, args.recent_limit)
+
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
     for line in notes:
@@ -641,6 +756,7 @@ def main() -> int:
         "payments": payments,
         "payment_summary": payment_summary,
         "audit": audit_summary,
+        "validation_errors": validation_summary,
         "interpretation": notes,
     }
 
