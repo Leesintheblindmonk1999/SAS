@@ -186,6 +186,34 @@ def init_audit_db(path: str = AUDIT_DB_PATH) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_infra_ts ON audit_events (is_infra, ts_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_events (request_id)")
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS validation_errors (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id             TEXT,
+                ts_utc                 TEXT NOT NULL,
+                path                   TEXT,
+                method                 TEXT,
+                status                 INTEGER,
+                content_type           TEXT,
+                content_length         INTEGER,
+                json_valid             INTEGER DEFAULT 0,
+                email_present          INTEGER DEFAULT 0,
+                email_valid            INTEGER DEFAULT 0,
+                name_present           INTEGER DEFAULT 0,
+                validation_error_types TEXT,
+                ip_hash                TEXT,
+                country                TEXT
+            )
+            """
+        )
+
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_validation_errors_ts ON validation_errors (ts_utc)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_validation_errors_path ON validation_errors (path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_validation_errors_status ON validation_errors (status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_validation_errors_ip ON validation_errors (ip_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_validation_errors_country ON validation_errors (country)")
+
         conn.commit()
         logger.info("audit_db_initialized path=%s", str(db_path))
     finally:
@@ -603,6 +631,101 @@ def delete_audit_ip_for_day(ip: str, date_str: str, db_path: str = AUDIT_DB_PATH
         return deleted
     finally:
         conn.close()
+
+
+
+# ==============================================================================
+# VALIDATION ERROR STORE
+# ==============================================================================
+
+
+def _save_validation_error_sync(data: dict[str, Any], db_path: str = AUDIT_DB_PATH) -> None:
+    """
+    Synchronous SQLite write for validation errors.
+
+    Called through asyncio.to_thread() by save_validation_error().
+    Does not store raw request body or raw email.
+    """
+    db = Path(db_path)
+    db.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(db), timeout=5)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS validation_errors (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id             TEXT,
+                ts_utc                 TEXT NOT NULL,
+                path                   TEXT,
+                method                 TEXT,
+                status                 INTEGER,
+                content_type           TEXT,
+                content_length         INTEGER,
+                json_valid             INTEGER DEFAULT 0,
+                email_present          INTEGER DEFAULT 0,
+                email_valid            INTEGER DEFAULT 0,
+                name_present           INTEGER DEFAULT 0,
+                validation_error_types TEXT,
+                ip_hash                TEXT,
+                country                TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO validation_errors (
+                request_id,
+                ts_utc,
+                path,
+                method,
+                status,
+                content_type,
+                content_length,
+                json_valid,
+                email_present,
+                email_valid,
+                name_present,
+                validation_error_types,
+                ip_hash,
+                country
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data.get("request_id", "unknown"),
+                datetime.now(timezone.utc).isoformat(),
+                data.get("path"),
+                data.get("method"),
+                int(data.get("status", 422)),
+                data.get("content_type"),
+                data.get("content_length"),
+                1 if data.get("json_valid") else 0,
+                1 if data.get("email_present") else 0,
+                1 if data.get("email_valid") else 0,
+                1 if data.get("name_present") else 0,
+                data.get("validation_error_types"),
+                data.get("ip_hash"),
+                data.get("country", "unknown"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def save_validation_error(data: dict[str, Any]) -> None:
+    """
+    Async wrapper for validation error persistence.
+
+    Uses a worker thread so RequestValidationError handling does not block
+    the event loop on sqlite3 writes.
+    """
+    await asyncio.to_thread(_save_validation_error_sync, data)
 
 
 def audit_db_stats(db_path: str = AUDIT_DB_PATH) -> dict[str, Any]:
