@@ -33,7 +33,7 @@ INFRA_PATHS = {"/health", "/readyz", "/robots.txt"}
 DISCOVERY_PATHS = {"/", "/docs", "/openapi.json", "/integrity", "/public/stats", "/public/activity"}
 TRIAL_PATHS = {"/public/demo/audit"}
 CONVERSION_PATHS = {"/public/request-key", "/billing/polar/checkout", "/billing/mercadopago/checkout"}
-AUTH_PATHS = {"/v1/whoami", "/v1/diff", "/v1/audit", "/v1/chat"}
+AUTH_PATHS = {"/v1/whoami", "/v1/diff", "/v1/audit", "/v1/chat", "/v1/batch"}
 
 
 def connect(path: str) -> sqlite3.Connection | None:
@@ -311,7 +311,7 @@ def print_metrics(summary: dict[str, Any], show_recent: bool, recent_limit: int)
     ordered = [
         "/", "/docs", "/openapi.json", "/public/stats", "/public/activity",
         "/public/demo/audit", "/public/request-key", "/v1/whoami", "/v1/diff",
-        "/v1/audit", "/v1/chat", "/billing/polar/checkout",
+        "/v1/audit", "/v1/chat", "/v1/batch", "/billing/polar/checkout",
         "/billing/mercadopago/checkout", "/billing/polar/webhook",
         "/billing/mercadopago/webhook",
     ]
@@ -789,43 +789,6 @@ def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempt
     return lines
 
 
-def interpretation_rate_limit(rate_limit_summary: dict[str, Any]) -> list[str]:
-    """Interpret rate limit data for the executive summary."""
-    lines = []
-    if not rate_limit_summary.get("available"):
-        return ["Rate limit data not available (rate_limit.db not found or table missing)."]
-
-    total = rate_limit_summary.get("total", 0) or 0
-    if total == 0:
-        lines.append("No rate limit events in this window — no pressure detected.")
-        return lines
-
-    blocked_rows = [r for r in rate_limit_summary.get("allowed_blocked", []) if int(r.get("allowed", 1)) == 0]
-    blocked = sum(int(r.get("count", 0)) for r in blocked_rows)
-    allowed = total - blocked
-
-    lines.append(f"Rate limit events: {total} total ({allowed} allowed, {blocked} blocked).")
-
-    if blocked == 0:
-        lines.append("No requests were blocked by rate limiting — traffic is within normal parameters.")
-    elif blocked < 10:
-        lines.append(f"{blocked} requests were blocked. Low pressure, likely manual exploration.")
-    elif blocked < 100:
-        lines.append(f"{blocked} requests were blocked. Moderate pressure — possible automation or repeated manual use.")
-    else:
-        lines.append(f"{blocked} requests were blocked. HIGH PRESSURE — investigate for scraping or abuse.")
-
-    # Most pressured scopes
-    by_scope = rate_limit_summary.get("by_scope", [])
-    blocked_scopes = [r for r in by_scope if int(r.get("allowed", 1)) == 0 and int(r.get("count", 0)) > 0]
-    if blocked_scopes:
-        top = sorted(blocked_scopes, key=lambda r: int(r.get("count", 0)), reverse=True)[:3]
-        scope_summary = ", ".join(f"{r['scope']} ({r['count']}x)" for r in top)
-        lines.append(f"Most blocked scopes: {scope_summary}.")
-
-    return lines
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="SAS operational funnel report")
     parser.add_argument("--metrics-db", default=DEFAULT_METRICS_DB)
@@ -882,8 +845,7 @@ def main() -> int:
 
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
-    rl_notes = interpretation_rate_limit(rate_limit_summary)
-    for line in notes + rl_notes:
+    for line in notes:
         print(f"- {line}")
 
     output = {
