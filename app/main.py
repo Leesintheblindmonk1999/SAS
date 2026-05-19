@@ -220,6 +220,14 @@ else:
     external_audit_router = None
 
 try:
+    from app.routers.batch import router as batch_router
+    HAS_BATCH = True
+except ImportError:
+    HAS_BATCH = False
+    batch_router = None
+    logger.info("Batch router not found. Optional /v1/batch disabled.")
+
+try:
     from app.routers.notarization_router import router as notarization_router
     HAS_NOTARIZATION = True
 except ImportError:
@@ -591,6 +599,9 @@ if HAS_STATUS and status_router:
 if HAS_EXTERNAL_AUDIT and external_audit_router:
     app.include_router(external_audit_router, tags=["External Audit"])
 
+if HAS_BATCH and batch_router:
+    app.include_router(batch_router, prefix="/v1", tags=["Batch"])
+
 if HAS_NOTARIZATION and notarization_router:
     app.include_router(notarization_router, tags=["Notarization"])
 
@@ -741,6 +752,7 @@ async def readyz() -> dict[str, Any]:
             "audit_conversation": HAS_AUDIT_CONVERSATION,
             "status": HAS_STATUS,
             "external_audit": HAS_EXTERNAL_AUDIT,
+            "batch": HAS_BATCH,
             "notarization": HAS_NOTARIZATION,
         },
     }
