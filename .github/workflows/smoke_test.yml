@@ -98,6 +98,7 @@ jobs:
           cat /tmp/readyz.json | jq -e '.databases.auth_db == true'
           cat /tmp/readyz.json | jq -e '.databases.metrics_db == true'
           cat /tmp/readyz.json | jq -e '.databases.audit_db == true'
+          cat /tmp/readyz.json | jq -e '.databases.rate_limit_db == true'
 
       - name: Check /robots.txt
         run: |
