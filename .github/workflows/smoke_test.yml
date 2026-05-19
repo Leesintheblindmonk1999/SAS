@@ -341,6 +341,64 @@ jobs:
           test "$alert" = "true"
           echo "$sources" | grep -q "SourceTargetGuard"
 
+      - name: Check protected /v1/batch
+        if: env.SAS_API_KEY != ''
+        run: |
+          set -e
+
+          payload=$(cat <<'JSON'
+          {
+            "pairs": [
+              {
+                "source": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
+                "response": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+              },
+              {
+                "source": "Water boils at 100 degrees Celsius at sea level.",
+                "response": "Water boils at 100 degrees Celsius at sea level."
+              }
+            ],
+            "experimental": true,
+            "domain": "generic"
+          }
+JSON
+          )
+
+          code=$(curl -sS -o /tmp/batch.json -w "%{http_code}" -X POST "$SAS_BASE_URL/v1/batch" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $SAS_API_KEY" \
+            -d "$payload" || true)
+
+          echo "HTTP $code"
+          cat /tmp/batch.json | jq .
+
+          test "$code" = "200"
+
+          status=$(cat /tmp/batch.json | jq -r '.status')
+          count=$(cat /tmp/batch.json | jq -r '.count')
+          results_len=$(cat /tmp/batch.json | jq '.results | length')
+          batch_flag=$(cat /tmp/batch.json | jq -r '.batch')
+          idx0=$(cat /tmp/batch.json | jq -r '.results[0].index')
+          idx1=$(cat /tmp/batch.json | jq -r '.results[1].index')
+
+          if [ "$status" != "ok" ] && [ "$status" != "partial_error" ]; then
+            echo "Unexpected batch status: $status"
+            exit 1
+          fi
+
+          test "$count" = "2"
+          test "$results_len" = "2"
+          test "$batch_flag" = "true"
+          test "$idx0" = "0"
+          test "$idx1" = "1"
+
+          item0_ok=$(cat /tmp/batch.json | jq -r '.results[0] | has("verdict") or has("error")')
+          item1_ok=$(cat /tmp/batch.json | jq -r '.results[1] | has("verdict") or has("error")')
+          test "$item0_ok" = "true"
+          test "$item1_ok" = "true"
+
+          echo "Batch smoke test passed."
+
       - name: Warn if SAS_API_KEY is missing
         if: env.SAS_API_KEY == ''
         run: |
