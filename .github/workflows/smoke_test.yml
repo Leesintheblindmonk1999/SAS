@@ -95,6 +95,7 @@ jobs:
           cat /tmp/readyz.json | jq -e '.routers.billing_mercadopago == true'
           cat /tmp/readyz.json | jq -e '.routers.diff == true'
           cat /tmp/readyz.json | jq -e '.routers.audit == true'
+          cat /tmp/readyz.json | jq -e '.routers.batch == true'
           cat /tmp/readyz.json | jq -e '.databases.auth_db == true'
           cat /tmp/readyz.json | jq -e '.databases.metrics_db == true'
           cat /tmp/readyz.json | jq -e '.databases.audit_db == true'
@@ -346,8 +347,7 @@ jobs:
         run: |
           set -e
 
-          payload=$(cat <<'JSON'
-          {
+          payload='{
             "pairs": [
               {
                 "source": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
@@ -360,9 +360,7 @@ jobs:
             ],
             "experimental": true,
             "domain": "generic"
-          }
-JSON
-          )
+          }'
 
           code=$(curl -sS -o /tmp/batch.json -w "%{http_code}" -X POST "$SAS_BASE_URL/v1/batch" \
             -H "Content-Type: application/json" \
