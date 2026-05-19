@@ -48,6 +48,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.middleware.validation_logger import log_validation_error
+from app.middleware.rate_limit import persistent_rate_limit_middleware
 from app.config import settings
 from app.db.auth_store import init_auth_db
 from app.services.auth import api_key_auth_middleware
@@ -62,6 +63,12 @@ from app.services.audit_store import (
     audit_middleware,
     init_audit_db,
     stop_writer,
+)
+
+from app.services.rate_limit_store import (
+    cleanup_old_rate_limit_events,
+    init_rate_limit_db,
+    rate_limit_db_stats,
 )
 
 # ==============================================================================
@@ -471,14 +478,18 @@ async def startup_databases():
     auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
     audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
+    rate_limit_db_path = str(getattr(settings, "rate_limit_db_path", "/app/data/rate_limit.db"))
 
     Path(auth_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(metrics_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(audit_db_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(rate_limit_db_path).parent.mkdir(parents=True, exist_ok=True)
 
     init_metrics_db()
     init_auth_db()
     init_audit_db(audit_db_path)
+    init_rate_limit_db(rate_limit_db_path)
+    cleanup_old_rate_limit_events(retention_hours=48)
 
     deleted = purge_old_metrics()
     if deleted:
@@ -517,6 +528,7 @@ async def shutdown_audit_store():
 # ==============================================================================
 
 app.middleware("http")(api_key_auth_middleware)
+app.middleware("http")(persistent_rate_limit_middleware)
 app.middleware("http")(request_monitoring_middleware)
 
 app.add_middleware(PayloadSizeLimitMiddleware)
@@ -694,12 +706,15 @@ async def readyz() -> dict[str, Any]:
     auth_db_path = str(getattr(settings, "auth_db_path", "/app/data/auth.db"))
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
     audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
+    rate_limit_db_path = str(getattr(settings, "rate_limit_db_path", "/app/data/rate_limit.db"))
     audit_stats = audit_db_stats(audit_db_path)
+    rate_limit_stats = rate_limit_db_stats(rate_limit_db_path)
 
     databases = {
         "auth_db": _check_sqlite_db(auth_db_path, required_table="users"),
         "metrics_db": _check_sqlite_db(metrics_db_path, required_table="api_request_metrics"),
         "audit_db": bool(audit_stats.get("ok")),
+        "rate_limit_db": bool(rate_limit_stats.get("ok")),
     }
 
     ready = all(databases.values())
