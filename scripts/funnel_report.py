@@ -27,6 +27,7 @@ from typing import Any
 DEFAULT_METRICS_DB = "/app/data/metrics.db"
 DEFAULT_AUTH_DB = "/app/data/auth.db"
 DEFAULT_AUDIT_DB = "/app/data/audit.db"
+DEFAULT_RATE_LIMIT_DB = "/app/data/rate_limit.db"
 
 INFRA_PATHS = {"/health", "/readyz", "/robots.txt"}
 DISCOVERY_PATHS = {"/", "/docs", "/openapi.json", "/integrity", "/public/stats", "/public/activity"}
@@ -654,6 +655,103 @@ def print_validation_errors_summary(summary: dict[str, Any], recent_limit: int) 
     )
 
 
+def load_rate_limit_summary(conn: sqlite3.Connection | None, start_iso: str) -> dict[str, Any]:
+    if conn is None or not table_exists(conn, "rate_limit_events"):
+        return {"available": False, "reason": "rate_limit_events table not found"}
+
+    data: dict[str, Any] = {"available": True}
+
+    total = rows(conn, "SELECT COUNT(*) AS count FROM rate_limit_events WHERE ts_utc >= ?", (start_iso,))
+    data["total"] = int(total[0]["count"] if total else 0)
+
+    allowed_blocked = rows(conn, """
+        SELECT allowed, COUNT(*) AS count
+        FROM rate_limit_events
+        WHERE ts_utc >= ?
+        GROUP BY allowed
+        ORDER BY allowed DESC
+    """, (start_iso,))
+    data["allowed_blocked"] = [dict(r) for r in allowed_blocked]
+
+    by_scope = rows(conn, """
+        SELECT scope, allowed, COUNT(*) AS count
+        FROM rate_limit_events
+        WHERE ts_utc >= ?
+        GROUP BY scope, allowed
+        ORDER BY count DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["by_scope"] = [dict(r) for r in by_scope]
+
+    by_path = rows(conn, """
+        SELECT path, method, allowed, COUNT(*) AS count
+        FROM rate_limit_events
+        WHERE ts_utc >= ?
+        GROUP BY path, method, allowed
+        ORDER BY count DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["by_path_method"] = [dict(r) for r in by_path]
+
+    recent_blocked = rows(conn, """
+        SELECT
+            ts_utc,
+            country,
+            method,
+            path,
+            scope,
+            limit_count,
+            window_seconds,
+            current_count,
+            retry_after_seconds,
+            request_id
+        FROM rate_limit_events
+        WHERE ts_utc >= ? AND allowed = 0
+        ORDER BY id DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["recent_blocked"] = [dict(r) for r in recent_blocked]
+
+    return data
+
+
+def print_rate_limit_summary(summary: dict[str, Any], recent_limit: int) -> None:
+    print_section("RATE LIMIT EVENTS")
+
+    if not summary.get("available"):
+        print(f"(not available: {summary.get('reason', 'unknown')})")
+        return
+
+    print(f"Total rate-limit events: {summary.get('total', 0)}")
+
+    print("\nALLOWED VS BLOCKED")
+    print_table(summary.get("allowed_blocked", []), ["allowed", "count"], 50)
+
+    print("\nBY SCOPE")
+    print_table(summary.get("by_scope", []), ["scope", "allowed", "count"], 50)
+
+    print("\nBY PATH / METHOD")
+    print_table(summary.get("by_path_method", []), ["path", "method", "allowed", "count"], 50)
+
+    print("\nRECENT BLOCKED")
+    print_table(
+        summary.get("recent_blocked", [])[:recent_limit],
+        [
+            "ts_utc",
+            "country",
+            "method",
+            "path",
+            "scope",
+            "limit_count",
+            "window_seconds",
+            "current_count",
+            "retry_after_seconds",
+            "request_id",
+        ],
+        recent_limit,
+    )
+
+
 def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempts: list[dict[str, Any]]) -> list[str]:
     lines = []
     total = metrics.get("total_requests", 0) or 0
@@ -691,11 +789,49 @@ def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempt
     return lines
 
 
+def interpretation_rate_limit(rate_limit_summary: dict[str, Any]) -> list[str]:
+    """Interpret rate limit data for the executive summary."""
+    lines = []
+    if not rate_limit_summary.get("available"):
+        return ["Rate limit data not available (rate_limit.db not found or table missing)."]
+
+    total = rate_limit_summary.get("total", 0) or 0
+    if total == 0:
+        lines.append("No rate limit events in this window — no pressure detected.")
+        return lines
+
+    blocked_rows = [r for r in rate_limit_summary.get("allowed_blocked", []) if int(r.get("allowed", 1)) == 0]
+    blocked = sum(int(r.get("count", 0)) for r in blocked_rows)
+    allowed = total - blocked
+
+    lines.append(f"Rate limit events: {total} total ({allowed} allowed, {blocked} blocked).")
+
+    if blocked == 0:
+        lines.append("No requests were blocked by rate limiting — traffic is within normal parameters.")
+    elif blocked < 10:
+        lines.append(f"{blocked} requests were blocked. Low pressure, likely manual exploration.")
+    elif blocked < 100:
+        lines.append(f"{blocked} requests were blocked. Moderate pressure — possible automation or repeated manual use.")
+    else:
+        lines.append(f"{blocked} requests were blocked. HIGH PRESSURE — investigate for scraping or abuse.")
+
+    # Most pressured scopes
+    by_scope = rate_limit_summary.get("by_scope", [])
+    blocked_scopes = [r for r in by_scope if int(r.get("allowed", 1)) == 0 and int(r.get("count", 0)) > 0]
+    if blocked_scopes:
+        top = sorted(blocked_scopes, key=lambda r: int(r.get("count", 0)), reverse=True)[:3]
+        scope_summary = ", ".join(f"{r['scope']} ({r['count']}x)" for r in top)
+        lines.append(f"Most blocked scopes: {scope_summary}.")
+
+    return lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="SAS operational funnel report")
     parser.add_argument("--metrics-db", default=DEFAULT_METRICS_DB)
     parser.add_argument("--auth-db", default=DEFAULT_AUTH_DB)
     parser.add_argument("--audit-db", default=DEFAULT_AUDIT_DB)
+    parser.add_argument("--rate-limit-db", default=DEFAULT_RATE_LIMIT_DB)
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--days", type=int, default=None)
     parser.add_argument("--show-recent", action="store_true")
@@ -718,10 +854,12 @@ def main() -> int:
     print(f"Metrics DB:   {args.metrics_db}")
     print(f"Auth DB:      {args.auth_db}")
     print(f"Audit DB:     {args.audit_db}")
+    print(f"RateLimit DB: {args.rate_limit_db}")
 
     metrics_conn = connect(args.metrics_db)
     auth_conn = connect(args.auth_db)
     audit_conn = connect(args.audit_db)
+    rate_limit_conn = connect(args.rate_limit_db)
 
     metrics_summary = {}
     if metrics_conn:
@@ -739,9 +877,13 @@ def main() -> int:
     validation_summary = load_validation_errors_summary(audit_conn, start_iso)
     print_validation_errors_summary(validation_summary, args.recent_limit)
 
+    rate_limit_summary = load_rate_limit_summary(rate_limit_conn, start_iso)
+    print_rate_limit_summary(rate_limit_summary, args.recent_limit)
+
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
-    for line in notes:
+    rl_notes = interpretation_rate_limit(rate_limit_summary)
+    for line in notes + rl_notes:
         print(f"- {line}")
 
     output = {
@@ -757,6 +899,7 @@ def main() -> int:
         "payment_summary": payment_summary,
         "audit": audit_summary,
         "validation_errors": validation_summary,
+        "rate_limit": rate_limit_summary,
         "interpretation": notes,
     }
 
@@ -766,6 +909,8 @@ def main() -> int:
         auth_conn.close()
     if audit_conn:
         audit_conn.close()
+    if rate_limit_conn:
+        rate_limit_conn.close()
 
     if args.json:
         print_section("JSON SUMMARY")
