@@ -489,7 +489,7 @@ async def startup_databases():
     init_auth_db()
     init_audit_db(audit_db_path)
     init_rate_limit_db(rate_limit_db_path)
-    cleanup_old_rate_limit_events(retention_hours=48)
+    cleanup_old_rate_limit_events(retention_hours=48, db_path=rate_limit_db_path)
 
     deleted = purge_old_metrics()
     if deleted:
