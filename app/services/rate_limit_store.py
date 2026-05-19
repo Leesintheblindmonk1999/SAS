@@ -255,19 +255,36 @@ def cleanup_old_rate_limit_events(
     retention_hours: int = 48,
     db_path: str = RATE_LIMIT_DB_PATH,
 ) -> int:
-    """Delete old rate-limit events. Intended for startup maintenance."""
-    cutoff = (utc_now() - timedelta(hours=int(retention_hours))).isoformat()
+    """
+    Delete old rate-limit events.
 
-    conn = _connect(db_path)
+    Defensive behavior:
+    - Ensures the table exists before DELETE.
+    - Safe on first deploy when rate_limit.db is empty.
+    - Intended for startup maintenance, not per-request.
+    """
     try:
-        cur = conn.execute("DELETE FROM rate_limit_events WHERE ts_utc < ?", (cutoff,))
-        conn.commit()
-        deleted = int(cur.rowcount or 0)
-        if deleted:
-            logger.info("rate_limit_retention deleted_rows=%s", deleted)
-        return deleted
-    finally:
-        conn.close()
+        init_rate_limit_db(db_path)
+
+        cutoff = (utc_now() - timedelta(hours=int(retention_hours))).isoformat()
+
+        conn = _connect(db_path)
+        try:
+            cur = conn.execute(
+                "DELETE FROM rate_limit_events WHERE ts_utc < ?",
+                (cutoff,),
+            )
+            conn.commit()
+            deleted = int(cur.rowcount or 0)
+            if deleted:
+                logger.info("rate_limit_retention deleted_rows=%s", deleted)
+            return deleted
+        finally:
+            conn.close()
+
+    except Exception as exc:
+        logger.warning("rate_limit_cleanup_failed_open error=%s", exc)
+        return 0
 
 
 def rate_limit_db_stats(db_path: str = RATE_LIMIT_DB_PATH) -> dict[str, Any]:
