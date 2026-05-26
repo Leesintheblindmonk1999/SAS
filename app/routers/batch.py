@@ -5,6 +5,7 @@ Audits multiple source/response pairs in a single authenticated request.
 Uses the same run_diff engine as /v1/diff internally.
 
 Design rules:
+- Requires API key explicitly via Depends(get_api_key).
 - Never log source or response text.
 - One item failing does not abort the rest.
 - Pydantic models enforce field limits at parse time.
@@ -20,10 +21,11 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
+from app.dependencies import get_api_key
 
 logger = logging.getLogger("sas.batch")
 
@@ -143,6 +145,7 @@ def _extract_manipulation_alert(d: dict[str, Any]) -> dict[str, Any]:
 async def batch_audit(
     payload: BatchRequest,
     request: Request,
+    _api_key: str = Depends(get_api_key),
 ) -> BatchResponse:
     request_id = getattr(request.state, "request_id", "unknown")
     pair_count = len(payload.pairs)
@@ -157,9 +160,8 @@ async def batch_audit(
         payload.domain,
     )
 
-    # Import run_diff here to keep the import inside the router,
-    # consistent with how other routers handle it, and to avoid
-    # circular imports if detector.py ever imports from routers.
+    # Import run_diff here to avoid startup failure if detector has a transient import issue.
+    # The endpoint returns a clean 503 instead of breaking app startup.
     try:
         from app.services.detector import run_diff
     except ImportError as exc:
