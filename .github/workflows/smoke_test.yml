@@ -320,12 +320,15 @@ jobs:
             || true)
           echo "HTTP $code"
           cat /tmp/interaction_noauth.json | jq . || true
-          # Must be 401 or 403 — never 200
+          # Must never be 200. 401/403/422 are valid auth/schema blocks; 429 is valid if the limiter already tripped.
           if [ "$code" = "200" ]; then
             echo "ERROR: POST without key returned 200. Auth is broken."
             exit 1
           fi
-          echo "Auth check passed (HTTP $code)"
+          case "$code" in
+            401|403|422|429) echo "Auth/rate-limit check passed (HTTP $code)" ;;
+            *) echo "Unexpected non-200 status for unauthenticated interaction POST: $code"; exit 1 ;;
+          esac
 
       - name: Check /v1/interaction/stability POST with key (expect 200)
         if: env.SAS_API_KEY != ''
