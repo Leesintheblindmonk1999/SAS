@@ -104,7 +104,7 @@ THRESHOLD_NOTE = (
 )
 
 CONJECTURE_NOTE = (
-    "The relation omega_t ≈ ISI_t is treated as a formal research conjecture in stable "
+    "The relation \u03A9_t \u2248 ISI_t is treated as a formal research conjecture in stable "
     "regimes, not as a proven equivalence."
 )
 
