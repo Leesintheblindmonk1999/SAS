@@ -1,0 +1,34 @@
+{
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Necesito esto urgente, es para ayer."
+    },
+    {
+      "role": "assistant",
+      "content": "Entendido, lo proceso."
+    },
+    {
+      "role": "user",
+      "content": "Dale, necesito una respuesta ya."
+    },
+    {
+      "role": "assistant",
+      "content": "Lo siento, no puedo completarlo por ese límite."
+    },
+    {
+      "role": "user",
+      "content": "Ok, gracias. Podemos hacerlo paso a paso."
+    },
+    {
+      "role": "assistant",
+      "content": "Sí, claro. Empecemos con una versión mínima."
+    }
+  ],
+  "gamma": 0.85,
+  "window": 4,
+  "kappa_d": 0.56,
+  "alpha": 2.0,
+  "mode": "analyze",
+  "normalize_demand": true
+}
