@@ -23,7 +23,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.services.rate_limit_store import check_persistent_rate_limit
 
 # NOTE: _BUCKETS lives in RAM and resets on every server restart.
-# Persistent SQLite-backed limits are added below for selected public routes.
+# Persistent SQLite-backed limits are added below for selected public and experimental routes.
 _BUCKETS: dict[str, list[float]] = {}
 _LOCK = Lock()
 
@@ -139,17 +139,25 @@ async def check_persistent_limit_or_raise(
 
 
 _PUBLIC_LIMITS: dict[tuple[str, str], tuple[str, int, int]] = {
+    # Public onboarding/conversion surfaces.
     ("GET", "/public/request-key"): ("public_request_key_get", 20, 60),
     ("POST", "/public/request-key"): ("public_request_key_post", 5, 600),
     ("POST", "/public/demo/audit"): ("public_demo_audit_post", 15, 600),
     ("GET", "/public/stats"): ("public_stats_get", 60, 60),
     ("GET", "/public/activity"): ("public_activity_get", 60, 60),
+
+    # T2 hardening: experimental interaction-stability surface.
+    # GET example is public but should not be scrapeable without friction.
+    # POST is authenticated, but still receives a persistent IP/path limiter
+    # before detector/model logic runs, protecting CPU in the owner's absence.
+    ("GET", "/v1/interaction/stability/example"): ("interaction_stability_example_get", 30, 600),
+    ("POST", "/v1/interaction/stability"): ("interaction_stability_post", 10, 600),
 }
 
 
 async def persistent_rate_limit_middleware(request: Request, call_next: Any):
     """
-    Path/method based persistent limiter for public surfaces.
+    Path/method based persistent limiter for public and selected experimental surfaces.
 
     Registered inside request_monitoring_middleware so request.state.request_id
     is available, but before endpoint logic runs.
