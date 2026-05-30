@@ -33,7 +33,7 @@ INFRA_PATHS = {"/health", "/readyz", "/robots.txt"}
 DISCOVERY_PATHS = {"/", "/docs", "/openapi.json", "/integrity", "/public/stats", "/public/activity"}
 TRIAL_PATHS = {"/public/demo/audit"}
 CONVERSION_PATHS = {"/public/request-key", "/billing/polar/checkout", "/billing/mercadopago/checkout"}
-AUTH_PATHS = {"/v1/whoami", "/v1/diff", "/v1/audit", "/v1/chat", "/v1/batch"}
+AUTH_PATHS = {"/v1/whoami", "/v1/diff", "/v1/audit", "/v1/chat", "/v1/batch", "/v1/interaction/stability", "/v1/interaction/stability/example"}
 
 
 def connect(path: str) -> sqlite3.Connection | None:
@@ -311,7 +311,8 @@ def print_metrics(summary: dict[str, Any], show_recent: bool, recent_limit: int)
     ordered = [
         "/", "/docs", "/openapi.json", "/public/stats", "/public/activity",
         "/public/demo/audit", "/public/request-key", "/v1/whoami", "/v1/diff",
-        "/v1/audit", "/v1/chat", "/v1/batch", "/billing/polar/checkout",
+        "/v1/audit", "/v1/chat", "/v1/batch", "/v1/interaction/stability/example",
+        "/v1/interaction/stability", "/billing/polar/checkout",
         "/billing/mercadopago/checkout", "/billing/polar/webhook",
         "/billing/mercadopago/webhook",
     ]
@@ -789,6 +790,43 @@ def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempt
     return lines
 
 
+def interpretation_rate_limit(rate_limit_summary: dict[str, Any]) -> list[str]:
+    """Operational notes for persistent rate-limit events."""
+    if not rate_limit_summary.get("available"):
+        return ["Rate-limit event table is unavailable; verify rate_limit.db readiness before broad launches."]
+
+    notes: list[str] = []
+    total = int(rate_limit_summary.get("total", 0) or 0)
+    if total == 0:
+        notes.append("No rate-limit events in this window. Either traffic was low or protected surfaces were not exercised.")
+        return notes
+
+    blocked = 0
+    by_scope = rate_limit_summary.get("by_scope", []) or []
+    for row in by_scope:
+        try:
+            if int(row.get("allowed", 1)) == 0:
+                blocked += int(row.get("count", 0) or 0)
+        except Exception:
+            continue
+
+    notes.append(f"Persistent rate-limit events exist: {total} total, {blocked} blocked.")
+
+    interaction_scopes = [
+        row for row in by_scope
+        if str(row.get("scope", "")).startswith("interaction_stability")
+    ]
+    if interaction_scopes:
+        notes.append("Interaction-stability rate limiting is active. Review interaction_stability_* scopes for abuse or accidental CI loops.")
+
+    if blocked:
+        notes.append("Blocked rate-limit events exist. Check RECENT BLOCKED for repeated IP/country buckets before raising limits.")
+    else:
+        notes.append("No blocked rate-limit events in this window; current limits have not been saturated.")
+
+    return notes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="SAS operational funnel report")
     parser.add_argument("--metrics-db", default=DEFAULT_METRICS_DB)
@@ -845,6 +883,7 @@ def main() -> int:
 
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
+    notes.extend(interpretation_rate_limit(rate_limit_summary))
     for line in notes:
         print(f"- {line}")
 
