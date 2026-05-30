@@ -28,6 +28,7 @@ Production improvements:
 - /app/data directory auto-creation for Render
 - PayloadSizeLimitMiddleware registered as outermost middleware
 - Persistent non-blocking audit store (audit.db)
+- Interaction stability experimental endpoint (behind ENABLE_INTERACTION_STABILITY flag)
 """
 
 from __future__ import annotations
@@ -236,6 +237,27 @@ except ImportError:
     logger.info("Notarization router not found.")
 
 # ==============================================================================
+# INTERACTION STABILITY ROUTER (experimental, behind env flag)
+#
+# The router is imported here so its existence is registered in /readyz.
+# It is only mounted on the app if ENABLE_INTERACTION_STABILITY=true at startup.
+# This is Layer 1 of the triple-protection architecture:
+#   Layer 1 — main.py: only mounted when env var is true
+#   Layer 2 — router:  _check_enabled() returns 503 if flag is false at call time
+#   Layer 3 — POST:    explicit Depends(get_api_key) auth
+# ==============================================================================
+
+import os as _os
+
+try:
+    from app.routers.interaction import router as interaction_router
+    HAS_INTERACTION_STABILITY = True
+except ImportError:
+    HAS_INTERACTION_STABILITY = False
+    interaction_router = None
+    logger.info("Interaction stability router not found. Optional /v1/interaction disabled.")
+
+# ==============================================================================
 # MONITORING HELPERS
 # ==============================================================================
 
@@ -327,6 +349,7 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
         "/v1/chat": 25 * 1024,                  # 25 KB
         "/v1/audit": 50 * 1024,                 # 50 KB
         "/v1/diff": 100 * 1024,                 # 100 KB — general cap
+        "/v1/interaction": 50 * 1024,           # 50 KB — 100 turns × 4000 chars max
         "/admin": 10 * 1024,                    # 10 KB
         "/billing": 100 * 1024,                 # 100 KB — provider webhooks
     }
@@ -351,8 +374,6 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
                 size = 0
 
             if size > limit:
-                # request_id may be "unknown" here since request_monitoring
-                # runs after this middleware. Acceptable — 413 is a clear signal.
                 request_id = getattr(request.state, "request_id", "unknown")
                 logger.warning(
                     "payload_too_large request_id=%s method=%s path=%s size=%s limit=%s",
@@ -503,8 +524,12 @@ async def startup_databases():
     if deleted:
         logger.info("metrics_retention deleted_rows=%s", deleted)
 
-    logger.info("startup_complete service=%s version=%s", SAS_NAME, SAS_VERSION)
-
+    # Log interaction stability status at startup so it's visible in Render logs
+    _interaction_flag = _os.getenv("ENABLE_INTERACTION_STABILITY", "false").lower() == "true"
+    logger.info(
+        "startup_complete service=%s version=%s interaction_stability=%s",
+        SAS_NAME, SAS_VERSION, _interaction_flag,
+    )
 
 
 @app.on_event("shutdown")
@@ -530,7 +555,7 @@ async def shutdown_audit_store():
 #   app.middleware("http")(api_key_auth_middleware)       ← innermost
 #   app.middleware("http")(request_monitoring_middleware)
 #   app.add_middleware(PayloadSizeLimitMiddleware)
-#   app.middleware("http")(audit_middleware)              ← wraps payload + monitoring
+#   app.middleware("http")(audit_middleware)
 #   app.add_middleware(SecurityHeadersMiddleware)
 #   app.add_middleware(CORSMiddleware)                    ← outermost of all
 # ==============================================================================
@@ -541,10 +566,6 @@ app.middleware("http")(request_monitoring_middleware)
 
 app.add_middleware(PayloadSizeLimitMiddleware)
 
-# Persistent sovereign audit log.
-# This middleware enqueues events into audit.db through app/services/audit_store.py.
-# It must be registered after request_monitoring_middleware exists in the stack,
-# so it can reuse request.state.request_id instead of generating a second ID.
 app.middleware("http")(audit_middleware)
 
 if HAS_SECURITY and SecurityHeadersMiddleware:
@@ -604,6 +625,23 @@ if HAS_BATCH and batch_router:
 
 if HAS_NOTARIZATION and notarization_router:
     app.include_router(notarization_router, tags=["Notarization"])
+
+# ── Interaction Stability (experimental) ──────────────────────────────────────
+# Layer 1 of triple protection: only mount the router when the env flag is set.
+# Even if mounted, Layer 2 (_check_enabled) returns 503 if the flag flips off
+# at call time. Layer 3 (Depends(get_api_key)) protects the POST endpoint.
+if HAS_INTERACTION_STABILITY and interaction_router:
+    if _os.getenv("ENABLE_INTERACTION_STABILITY", "false").lower() == "true":
+        app.include_router(interaction_router, tags=["Interaction Stability"])
+        logger.info(
+            "interaction_stability_router registered "
+            "(ENABLE_INTERACTION_STABILITY=true)"
+        )
+    else:
+        logger.info(
+            "interaction_stability_router NOT registered "
+            "(ENABLE_INTERACTION_STABILITY not set or false)"
+        )
 
 
 # ==============================================================================
@@ -708,8 +746,9 @@ async def readyz() -> dict[str, Any]:
     Checks:
     - all routers imported correctly;
     - auth SQLite readable and contains the users table;
-    - metrics SQLite readable and contains api_request_metrics table.
-    - audit SQLite readable and contains audit_events table.
+    - metrics SQLite readable and contains api_request_metrics table;
+    - audit SQLite readable and contains audit_events table;
+    - rate_limit SQLite readable.
 
     Returns "ready" only when all databases pass.
     Does not expose DB paths, table contents, raw errors, or secrets.
@@ -729,6 +768,12 @@ async def readyz() -> dict[str, Any]:
     }
 
     ready = all(databases.values())
+
+    # Interaction stability flag — read at request time, not at import time
+    _interaction_enabled = (
+        HAS_INTERACTION_STABILITY
+        and _os.getenv("ENABLE_INTERACTION_STABILITY", "false").lower() == "true"
+    )
 
     return {
         "status": "ready" if ready else "degraded",
@@ -754,6 +799,8 @@ async def readyz() -> dict[str, Any]:
             "external_audit": HAS_EXTERNAL_AUDIT,
             "batch": HAS_BATCH,
             "notarization": HAS_NOTARIZATION,
+            # Interaction stability: True only when imported AND env flag is on
+            "interaction_stability": _interaction_enabled,
         },
     }
 
