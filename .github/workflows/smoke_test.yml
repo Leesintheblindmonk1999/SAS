@@ -49,8 +49,9 @@ jobs:
           set -e
           code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$SAS_BASE_URL/health" || true)
           echo "HTTP $code"
-          cat /tmp/health.json | jq .
+          cat /tmp/health.json || true
           test "$code" = "200"
+          cat /tmp/health.json | jq .
           status=$(cat /tmp/health.json | jq -r '.status')
           kappa=$(cat /tmp/health.json | jq -r '.kappa_d')
           test "$status" = "ok"
@@ -60,8 +61,9 @@ jobs:
           set -e
           code=$(curl -sS -o /tmp/readyz.json -w "%{http_code}" "$SAS_BASE_URL/readyz" || true)
           echo "HTTP $code"
-          cat /tmp/readyz.json | jq .
+          cat /tmp/readyz.json || true
           test "$code" = "200"
+          cat /tmp/readyz.json | jq .
           status=$(cat /tmp/readyz.json | jq -r '.status')
           test "$status" = "ready"
           cat /tmp/readyz.json | jq -e '.routers.public_demo == true'
@@ -72,11 +74,13 @@ jobs:
           cat /tmp/readyz.json | jq -e '.routers.diff == true'
           cat /tmp/readyz.json | jq -e '.routers.audit == true'
           cat /tmp/readyz.json | jq -e '.routers.batch == true'
+          cat /tmp/readyz.json | jq -e '.routers.public_interaction_stats == true'
+          cat /tmp/readyz.json | jq -e '.routers.interaction_stability == true'
           cat /tmp/readyz.json | jq -e '.databases.auth_db == true'
           cat /tmp/readyz.json | jq -e '.databases.metrics_db == true'
           cat /tmp/readyz.json | jq -e '.databases.audit_db == true'
           cat /tmp/readyz.json | jq -e '.databases.rate_limit_db == true'
-          cat /tmp/readyz.json | jq -e '.routers.interaction_stability == true'
+          cat /tmp/readyz.json | jq -e '.databases.interaction_db == true'
       - name: Check /robots.txt
         run: |
           set -e
@@ -104,6 +108,22 @@ jobs:
           test "$status" = "ok"
           cat /tmp/stats.json | jq -e '.privacy.raw_ips_exposed == false'
           cat /tmp/stats.json | jq -e '.privacy.api_keys_exposed == false'
+      - name: Check public interaction stats
+        run: |
+          set -e
+          code=$(curl -sS -o /tmp/interaction_stats.json -w "%{http_code}" "$SAS_BASE_URL/public/interaction/stats?days=7" || true)
+          echo "HTTP $code"
+          cat /tmp/interaction_stats.json || true
+          test "$code" = "200"
+          cat /tmp/interaction_stats.json | jq .
+          status=$(cat /tmp/interaction_stats.json | jq -r '.status')
+          test "$status" = "ok"
+          cat /tmp/interaction_stats.json | jq -e '.period != null'
+          cat /tmp/interaction_stats.json | jq -e '.total_analyses != null'
+          cat /tmp/interaction_stats.json | jq -e '.privacy.raw_text_stored == false'
+          cat /tmp/interaction_stats.json | jq -e '.privacy.raw_api_keys_stored == false'
+          cat /tmp/interaction_stats.json | jq -e '.privacy.public_stats_are_aggregated == true'
+
       - name: Check public activity
         run: |
           set -e
@@ -374,6 +394,27 @@ jobs:
           cat /tmp/interaction.json | jq -e '.trajectory[0].alerts != null'
           cat /tmp/interaction.json | jq -e '.summary.demand_model.phi != null'
           echo "Interaction stability smoke test passed."
+
+      - name: Check interaction stats after POST
+        if: env.SAS_API_KEY != ''
+        run: |
+          set -e
+          echo "Waiting briefly for interaction writer flush..."
+          sleep 4
+          code=$(curl -sS -o /tmp/interaction_stats_after_post.json -w "%{http_code}" "$SAS_BASE_URL/public/interaction/stats?days=7" || true)
+          echo "HTTP $code"
+          cat /tmp/interaction_stats_after_post.json || true
+          test "$code" = "200"
+          cat /tmp/interaction_stats_after_post.json | jq .
+          status=$(cat /tmp/interaction_stats_after_post.json | jq -r '.status')
+          total=$(cat /tmp/interaction_stats_after_post.json | jq -r '.total_analyses')
+          test "$status" = "ok"
+          test "$total" != "null"
+          cat /tmp/interaction_stats_after_post.json | jq -e '.privacy.raw_text_stored == false'
+          cat /tmp/interaction_stats_after_post.json | jq -e '.privacy.raw_api_keys_stored == false'
+          cat /tmp/interaction_stats_after_post.json | jq -e '.privacy.public_stats_are_aggregated == true'
+          echo "Interaction stats smoke check passed with total_analyses=$total."
+
 
       - name: Check /v1/interaction/stability POST empty conversation (expect 422)
         if: env.SAS_API_KEY != ''
