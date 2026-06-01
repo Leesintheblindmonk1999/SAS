@@ -72,6 +72,12 @@ from app.services.rate_limit_store import (
     rate_limit_db_stats,
 )
 
+from app.services.interaction_store import (
+    init_interaction_db,
+    interaction_db_stats,
+    stop_interaction_writer,
+)
+
 # ==============================================================================
 # CENTRALIZED METADATA
 # ==============================================================================
@@ -179,6 +185,14 @@ except ImportError:
     HAS_PUBLIC_REQUEST_KEY = False
     public_request_key_router = None
     logger.info("Public request-key router not found.")
+
+try:
+    from app.routers.public_interaction_stats import router as public_interaction_stats_router
+    HAS_PUBLIC_INTERACTION_STATS = True
+except ImportError:
+    HAS_PUBLIC_INTERACTION_STATS = False
+    public_interaction_stats_router = None
+    logger.info("Public interaction stats router not found.")
 
 try:
     from app.routers.whoami import router as whoami_router
@@ -508,16 +522,24 @@ async def startup_databases():
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
     audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
     rate_limit_db_path = str(getattr(settings, "rate_limit_db_path", "/app/data/rate_limit.db"))
+    interaction_db_path = _os.getenv("INTERACTION_DB_PATH", "/app/data/interaction.db")
 
     Path(auth_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(metrics_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(audit_db_path).parent.mkdir(parents=True, exist_ok=True)
     Path(rate_limit_db_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(interaction_db_path).parent.mkdir(parents=True, exist_ok=True)
 
     init_metrics_db()
     init_auth_db()
     init_audit_db(audit_db_path)
     init_rate_limit_db(rate_limit_db_path)
+    try:
+        init_interaction_db(interaction_db_path)
+    except Exception as exc:
+        # Interaction observability is non-critical. The API must still boot
+        # even if interaction.db is temporarily unavailable.
+        logger.error("interaction_db_init_failed error=%s", exc)
     cleanup_old_rate_limit_events(retention_hours=48, db_path=rate_limit_db_path)
 
     deleted = purge_old_metrics()
@@ -534,8 +556,9 @@ async def startup_databases():
 
 @app.on_event("shutdown")
 async def shutdown_audit_store():
-    """Flush and stop the persistent audit writer."""
+    """Flush and stop persistent background writers."""
     stop_writer()
+    stop_interaction_writer()
 
 # ==============================================================================
 # MIDDLEWARE REGISTRATION — ORDER MATTERS
@@ -592,6 +615,9 @@ if HAS_METRICS and metrics_router:
 
 if HAS_PUBLIC_ACTIVITY and public_activity_router:
     app.include_router(public_activity_router, tags=["Public"])
+
+if HAS_PUBLIC_INTERACTION_STATS and public_interaction_stats_router:
+    app.include_router(public_interaction_stats_router, tags=["Public"])
 
 if HAS_PUBLIC_DEMO and public_demo_router:
     app.include_router(public_demo_router, tags=["Public"])
@@ -709,6 +735,7 @@ async def root() -> dict[str, Any]:
             "whoami": "/v1/whoami",
             "public_stats": "/public/stats",
             "public_activity": "/public/activity",
+            "public_interaction_stats": "/public/interaction/stats",
             "public_demo": "/public/demo/audit",
             "request_key": "/public/request-key",
             "polar_checkout": "/billing/polar/checkout",
@@ -757,17 +784,25 @@ async def readyz() -> dict[str, Any]:
     metrics_db_path = str(getattr(settings, "metrics_db_path", "/app/data/metrics.db"))
     audit_db_path = str(getattr(settings, "audit_db_path", "/app/data/audit.db"))
     rate_limit_db_path = str(getattr(settings, "rate_limit_db_path", "/app/data/rate_limit.db"))
+    interaction_db_path = _os.getenv("INTERACTION_DB_PATH", "/app/data/interaction.db")
     audit_stats = audit_db_stats(audit_db_path)
     rate_limit_stats = rate_limit_db_stats(rate_limit_db_path)
+    interaction_stats = interaction_db_stats(interaction_db_path)
 
-    databases = {
+    core_databases = {
         "auth_db": _check_sqlite_db(auth_db_path, required_table="users"),
         "metrics_db": _check_sqlite_db(metrics_db_path, required_table="api_request_metrics"),
         "audit_db": bool(audit_stats.get("ok")),
         "rate_limit_db": bool(rate_limit_stats.get("ok")),
     }
 
-    ready = all(databases.values())
+    databases = {
+        **core_databases,
+        # Observability DB is reported but does not gate core service readiness.
+        "interaction_db": bool(interaction_stats.get("ok")),
+    }
+
+    ready = all(core_databases.values())
 
     # Interaction stability flag — read at request time, not at import time
     _interaction_enabled = (
@@ -788,6 +823,7 @@ async def readyz() -> dict[str, Any]:
             "admin": True,
             "metrics": HAS_METRICS,
             "public_activity": HAS_PUBLIC_ACTIVITY,
+            "public_interaction_stats": HAS_PUBLIC_INTERACTION_STATS,
             "public_demo": HAS_PUBLIC_DEMO,
             "public_request_key": HAS_PUBLIC_REQUEST_KEY,
             "whoami": HAS_WHOAMI,
