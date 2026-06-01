@@ -28,6 +28,7 @@ DEFAULT_METRICS_DB = "/app/data/metrics.db"
 DEFAULT_AUTH_DB = "/app/data/auth.db"
 DEFAULT_AUDIT_DB = "/app/data/audit.db"
 DEFAULT_RATE_LIMIT_DB = "/app/data/rate_limit.db"
+DEFAULT_INTERACTION_DB = "/app/data/interaction.db"
 
 INFRA_PATHS = {"/health", "/readyz", "/robots.txt"}
 DISCOVERY_PATHS = {"/", "/docs", "/openapi.json", "/integrity", "/public/stats", "/public/activity"}
@@ -753,6 +754,107 @@ def print_rate_limit_summary(summary: dict[str, Any], recent_limit: int) -> None
     )
 
 
+
+def load_interaction_summary(conn: sqlite3.Connection | None, start_iso: str) -> dict[str, Any]:
+    if conn is None or not table_exists(conn, "interaction_events"):
+        return {"available": False, "reason": "interaction_events table not found"}
+
+    data: dict[str, Any] = {"available": True}
+    total = rows(conn, "SELECT COUNT(*) AS count FROM interaction_events WHERE ts_utc >= ?", (start_iso,))
+    data["total"] = int(total[0]["count"] if total else 0)
+
+    aggregates = rows(conn, """
+        SELECT
+            AVG(conversation_turns) AS avg_conversation_turns,
+            AVG(assistant_turns) AS avg_assistant_turns,
+            AVG(final_omega_t) AS avg_final_omega_t,
+            AVG(final_sigma) AS avg_final_sigma,
+            AVG(demand_peak) AS avg_demand_peak,
+            AVG(threshold_crossed) AS threshold_crossed_pct,
+            AVG(stability_below_kappa) AS stability_below_kappa_pct,
+            AVG(high_uncertainty) AS high_uncertainty_pct,
+            AVG(latency_ms) AS avg_latency_ms
+        FROM interaction_events
+        WHERE ts_utc >= ?
+    """, (start_iso,))
+    data["aggregates"] = dict(aggregates[0]) if aggregates else {}
+
+    by_state = rows(conn, """
+        SELECT final_dominant_state, COUNT(*) AS count
+        FROM interaction_events
+        WHERE ts_utc >= ?
+        GROUP BY final_dominant_state
+        ORDER BY count DESC
+        LIMIT 20
+    """, (start_iso,))
+    data["by_dominant_state"] = [dict(r) for r in by_state]
+
+    by_plan = rows(conn, """
+        SELECT plan, COUNT(*) AS count
+        FROM interaction_events
+        WHERE ts_utc >= ?
+        GROUP BY plan
+        ORDER BY count DESC
+        LIMIT 20
+    """, (start_iso,))
+    data["by_plan"] = [dict(r) for r in by_plan]
+
+    recent = rows(conn, """
+        SELECT
+            ts_utc, request_id, api_key_hash, user_id, plan,
+            conversation_turns, assistant_turns, final_dominant_state,
+            final_dominant_probability, final_omega_t, final_sigma,
+            demand_peak, threshold_crossed, stability_below_kappa,
+            high_uncertainty, latency_ms
+        FROM interaction_events
+        WHERE ts_utc >= ?
+        ORDER BY id DESC
+        LIMIT 50
+    """, (start_iso,))
+    data["recent"] = [dict(r) for r in recent]
+    return data
+
+
+def print_interaction_summary(summary: dict[str, Any], recent_limit: int) -> None:
+    print_section("INTERACTION STABILITY USAGE")
+    if not summary.get("available"):
+        print(f"(not available: {summary.get('reason', 'unknown')})")
+        return
+
+    print(f"Total interaction analyses: {summary.get('total', 0)}")
+    agg = summary.get("aggregates", {}) or {}
+    if agg:
+        print(f"Avg conversation turns:     {float(agg.get('avg_conversation_turns') or 0):.2f}")
+        print(f"Avg assistant turns:        {float(agg.get('avg_assistant_turns') or 0):.2f}")
+        print(f"Avg final omega_t:          {float(agg.get('avg_final_omega_t') or 0):.4f}")
+        print(f"Avg final sigma:            {float(agg.get('avg_final_sigma') or 0):.4f}")
+        print(f"Avg demand peak:            {float(agg.get('avg_demand_peak') or 0):.4f}")
+        print(f"Threshold crossed pct:      {float(agg.get('threshold_crossed_pct') or 0):.4f}")
+        print(f"Stability below kappa pct:  {float(agg.get('stability_below_kappa_pct') or 0):.4f}")
+        print(f"High uncertainty pct:       {float(agg.get('high_uncertainty_pct') or 0):.4f}")
+        print(f"Avg latency ms:             {float(agg.get('avg_latency_ms') or 0):.2f}")
+
+    print("\nDOMINANT STATES")
+    print_table(summary.get("by_dominant_state", []), ["final_dominant_state", "count"], 20)
+
+    print("\nPLANS")
+    print_table(summary.get("by_plan", []), ["plan", "count"], 20)
+
+    print("\nRECENT INTERACTION EVENTS")
+    print_table(
+        summary.get("recent", [])[:recent_limit],
+        [
+            "ts_utc", "request_id", "api_key_hash", "user_id", "plan",
+            "conversation_turns", "assistant_turns", "final_dominant_state",
+            "final_omega_t", "final_sigma", "demand_peak",
+            "threshold_crossed", "stability_below_kappa",
+            "high_uncertainty", "latency_ms",
+        ],
+        recent_limit,
+    )
+
+
+
 def interpretation(metrics: dict[str, Any], users: list[dict[str, Any]], attempts: list[dict[str, Any]]) -> list[str]:
     lines = []
     total = metrics.get("total_requests", 0) or 0
@@ -833,6 +935,7 @@ def main() -> int:
     parser.add_argument("--auth-db", default=DEFAULT_AUTH_DB)
     parser.add_argument("--audit-db", default=DEFAULT_AUDIT_DB)
     parser.add_argument("--rate-limit-db", default=DEFAULT_RATE_LIMIT_DB)
+    parser.add_argument("--interaction-db", default=DEFAULT_INTERACTION_DB)
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--days", type=int, default=None)
     parser.add_argument("--show-recent", action="store_true")
@@ -856,11 +959,13 @@ def main() -> int:
     print(f"Auth DB:      {args.auth_db}")
     print(f"Audit DB:     {args.audit_db}")
     print(f"RateLimit DB: {args.rate_limit_db}")
+    print(f"Interaction DB:{args.interaction_db}")
 
     metrics_conn = connect(args.metrics_db)
     auth_conn = connect(args.auth_db)
     audit_conn = connect(args.audit_db)
     rate_limit_conn = connect(args.rate_limit_db)
+    interaction_conn = connect(args.interaction_db)
 
     metrics_summary = {}
     if metrics_conn:
@@ -881,9 +986,20 @@ def main() -> int:
     rate_limit_summary = load_rate_limit_summary(rate_limit_conn, start_iso)
     print_rate_limit_summary(rate_limit_summary, args.recent_limit)
 
+    interaction_summary = load_interaction_summary(interaction_conn, start_iso)
+    print_interaction_summary(interaction_summary, args.recent_limit)
+
     print_section("RECOMMENDED INTERPRETATION")
     notes = interpretation(metrics_summary, users, attempts)
     notes.extend(interpretation_rate_limit(rate_limit_summary))
+    if interaction_summary.get("available"):
+        total_interaction = int(interaction_summary.get("total", 0) or 0)
+        if total_interaction:
+            notes.append(f"Interaction observability is active: {total_interaction} analyses recorded in this window.")
+        else:
+            notes.append("Interaction observability is available but no analyses were recorded in this window.")
+    else:
+        notes.append("Interaction observability store is not available in this window/report.")
     for line in notes:
         print(f"- {line}")
 
@@ -901,6 +1017,7 @@ def main() -> int:
         "audit": audit_summary,
         "validation_errors": validation_summary,
         "rate_limit": rate_limit_summary,
+        "interaction": interaction_summary,
         "interpretation": notes,
     }
 
@@ -912,6 +1029,8 @@ def main() -> int:
         audit_conn.close()
     if rate_limit_conn:
         rate_limit_conn.close()
+    if interaction_conn:
+        interaction_conn.close()
 
     if args.json:
         print_section("JSON SUMMARY")
