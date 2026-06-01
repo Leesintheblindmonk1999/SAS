@@ -16,12 +16,14 @@ Do not rely on global /v1 middleware for auth. Auth is explicit per endpoint.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.dependencies import get_api_key
+from app.services.interaction_store import record_interaction_event
 from app.services.interaction_stability import (
     CONJECTURE_NOTE,
     DEFAULT_KAPPA_D,
@@ -204,37 +206,39 @@ async def interaction_stability_example() -> Dict[str, Any]:
     ),
 )
 async def interaction_stability(
-    request: StabilityRequest,
+    request: Request,
+    payload: StabilityRequest,
     # C5: Explicit auth dependency — do not rely on global /v1 middleware.
     _api_key: dict = Depends(get_api_key),
 ) -> StabilityResponse:
     # C4: Layer-2 feature flag check
     _check_enabled()
+    started = time.perf_counter()
 
-    if request.mode not in {"analyze", "estimate", "advise"}:
+    if payload.mode not in {"analyze", "estimate", "advise"}:
         raise HTTPException(
             status_code=422,
             detail="mode must be one of: analyze, estimate, advise.",
         )
 
-    if request.mode != "analyze":
+    if payload.mode != "analyze":
         raise HTTPException(
             status_code=501,
             detail=(
-                f"Mode '{request.mode}' is reserved for a future release. "
+                f"Mode '{payload.mode}' is reserved for a future release. "
                 "Only mode='analyze' is implemented in the MVP."
             ),
         )
 
     try:
         result = analyze_conversation(
-            conversation=[_dump_model(turn) for turn in request.conversation],
-            gamma=request.gamma,
-            window=request.window,
-            kappa_d=request.kappa_d,
-            alpha=request.alpha,
-            mode=request.mode,
-            normalize_demand=request.normalize_demand,
+            conversation=[_dump_model(turn) for turn in payload.conversation],
+            gamma=payload.gamma,
+            window=payload.window,
+            kappa_d=payload.kappa_d,
+            alpha=payload.alpha,
+            mode=payload.mode,
+            normalize_demand=payload.normalize_demand,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -243,6 +247,25 @@ async def interaction_stability(
     except RuntimeError as exc:
         # C4: Catches INTERACTION_STABILITY_ENABLED=False raised inside service
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+    latency_ms = (time.perf_counter() - started) * 1000.0
+
+    # T2: interaction observability. Fail-open inside the store.
+    # Raw conversation text is never passed to the store.
+    record_interaction_event(
+        request_id=result.request_id,
+        executed_at=result.executed_at,
+        api_key=request.headers.get("X-API-Key"),
+        user_id=_api_key.get("user_id") if isinstance(_api_key, dict) else "unknown",
+        plan=_api_key.get("plan") if isinstance(_api_key, dict) else "unknown",
+        conversation_turns=len(payload.conversation),
+        assistant_turns=len(result.trajectory),
+        summary=result.summary,
+        input_hash=result.input_hash,
+        content_fingerprint=result.content_fingerprint,
+        latency_ms=latency_ms,
+    )
 
     return StabilityResponse(
         status=result.status,
