@@ -636,6 +636,12 @@ CLI:
 sas chat "Explain κD = 0.56 in one paragraph."
 ```
 
+Notes:
+
+- Responses are filtered through the SAS κD coherence layer.
+- This endpoint is not a general-purpose chatbot.
+- For deterministic structural auditing, prefer `/v1/diff`, `/v1/audit`, or `/v1/batch`.
+
 ---
 
 ## 6. Experimental interaction endpoints
@@ -676,7 +682,7 @@ Typical fields:
 Notes:
 
 - Public, no API key required.
-- Feature-flag controlled.
+- Feature-flag controlled: returns `503` if `ENABLE_INTERACTION_STABILITY` is not set.
 - Persistently rate-limited.
 
 ---
@@ -731,6 +737,7 @@ Example response shape:
   "model_version": "interaction-stability-v1.2.1-mvp",
   "theory_reference": "stochastic_interaction_v1.2.0",
   "theory_doi": "10.5281/zenodo.20335612",
+  "conjecture_note": "The relation omega_t ~ ISI_t is treated as a formal research conjecture in stable regimes, not as a proven equivalence.",
   "kappa_d_ref": 0.56,
   "theta_hat": 0.56,
   "alpha": 2.0,
