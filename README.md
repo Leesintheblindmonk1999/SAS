@@ -360,6 +360,8 @@ docs/api.md
 | Avg ISI (hallucination) | 0.072993 |
 | Avg ISI (clean) | 1.000000 |
 
+> Results are dataset-specific. See [benchmark methodology](docs/benchmark.md) for scope and replication details.
+
 Confusion matrix:
 
 |  | Actual hallucination | Actual clean |
