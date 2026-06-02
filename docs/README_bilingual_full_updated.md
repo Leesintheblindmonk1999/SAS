@@ -1,17 +1,22 @@
 # SAS - Symbiotic Autoprotection System
 
+> Extended bilingual documentation hub / Centro de documentación bilingüe extendido.
+>
+> Main repository README: [../README.md](../README.md) · API reference: [api.md](api.md) · Privacy: [../PRIVACY.md](../PRIVACY.md)
+
+
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19702379.svg)](https://doi.org/10.5281/zenodo.19702379)
 [![Landing Page](https://img.shields.io/badge/🌐-Landing_Page-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
 [![API Online](https://img.shields.io/badge/API-online-brightgreen)](https://sas-api.onrender.com)
 [![PyPI](https://img.shields.io/pypi/v/sas-client?label=sas-client&color=blue)](https://pypi.org/project/sas-client/)
-[![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
+[![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](../LICENSE.md)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](../requirements.txt)
 [![API](https://img.shields.io/badge/API-FastAPI-009688)](https://sas-api.onrender.com/docs)
 [![Status](https://img.shields.io/badge/status-research%20alpha-orange)](#es-alcance-y-limitaciones)
-[![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](docs/benchmark_complete_20260429_172647.json)
-[![OTS Proof](https://img.shields.io/badge/OpenTimestamps-proof-blueviolet)](docs/benchmark_complete_20260429_172647.json.ots)
-[![Security](https://img.shields.io/badge/security-policy-lightgrey)](SECURITY.md)
-[![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
+[![Benchmark](https://img.shields.io/badge/benchmark-98.8%25%20accuracy-brightgreen)](benchmark_complete_20260429_172647.json)
+[![OTS Proof](https://img.shields.io/badge/OpenTimestamps-proof-blueviolet)](benchmark_complete_20260429_172647.json.ots)
+[![Security](https://img.shields.io/badge/security-policy-lightgrey)](../SECURITY.md)
+[![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen)](../CONTRIBUTING.md)
 [![Smoke Test](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml/badge.svg)](https://github.com/Leesintheblindmonk1999/SAS/actions/workflows/smoke_test.yml)
 
 <!-- SAS-LIVE-METRICS:START -->
@@ -95,6 +100,66 @@ El autoalojamiento sigue siendo completamente posible bajo los términos de la l
 
 ---
 
+<a id="es-estado-operativo-actual"></a>
+
+## Estado operativo actual
+
+SAS ya no es solo un prototipo de detección: actualmente opera como una API pública con autenticación, cuotas, rate limiting, observabilidad, smoke tests y stores persistentes.
+
+Estado validado recientemente:
+
+```text
+/health                               -> ok
+/readyz                               -> ready
+/public/stats                         -> ok
+/public/activity                      -> ok
+/public/interaction/stats             -> ok
+/v1/diff                              -> activo
+/v1/audit                             -> activo
+/v1/batch                             -> activo
+/v1/interaction/stability             -> activo detrás de flag + API key
+```
+
+Bases verificadas por `/readyz`:
+
+| Store | Estado | Uso |
+|---|---|---|
+| `auth.db` | activo | usuarios, API keys, cuotas |
+| `metrics.db` | activo | métricas de requests y funnel |
+| `audit.db` | activo | audit trail y validation errors |
+| `rate_limit.db` | activo | eventos de rate limiting |
+| `interaction.db` | activo | observabilidad agregada de interaction stability |
+
+Routers relevantes activos:
+
+```text
+public_demo
+public_request_key
+public_activity
+public_interaction_stats
+whoami
+diff
+audit
+batch
+interaction_stability
+billing_polar
+billing_mercadopago
+notarization
+```
+
+Superficies actuales:
+
+| Línea | Endpoints |
+|---|---|
+| Structural Coherence Auditing | `/v1/diff`, `/v1/audit`, `/v1/batch`, `/public/demo/audit` |
+| Temporal Interaction Auditing | `/v1/interaction/stability`, `/v1/interaction/stability/example`, `/public/interaction/stats` |
+| Onboarding | `/public/request-key`, `/v1/whoami` |
+| Observabilidad pública | `/public/stats`, `/public/activity`, `/public/interaction/stats` |
+| Sistema | `/health`, `/readyz`, `/integrity`, `/robots.txt` |
+| Billing alojado | Polar + Mercado Pago checkout/webhooks |
+
+---
+
 <a id="es-python-client"></a>
 
 ## Cliente Python oficial
@@ -158,15 +223,22 @@ sas diff "Python is a programming language." "A python is a snake."
 
 | Documento | Descripción |
 |---|---|
-| [Security Policy](SECURITY.md) | Reporte de vulnerabilidades, notas de seguridad y divulgación responsable |
-| [Contributing Guide](CONTRIBUTING.md) | Setup de desarrollo, pull requests, testing y reglas de contribución |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Estándares comunitarios y política de convivencia |
-| [Architecture Overview](docs/architecture.md) | Diseño de alto nivel, pipeline de detección, módulos y flujo de datos |
-| [Benchmark JSON](docs/benchmark_complete_20260429_172647.json) | Resultado completo del benchmark |
-| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | Prueba OpenTimestamps del benchmark |
-| [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md) | Template de GitHub Issues para bugs |
-| [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md) | Template de GitHub Issues para mejoras |
-| [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
+| [README principal](../README.md) | Vista rápida del proyecto, API pública, capacidades y roadmap |
+| [Privacy and Observability](../PRIVACY.md) | Manejo de datos, hashes, fingerprints y stats públicas |
+| [API Reference](api.md) | Endpoints, auth, ejemplos, errores y recomendaciones de cliente |
+| [Architecture Overview](architecture.md) | Diseño de alto nivel, pipeline de detección, módulos y flujo de datos |
+| [Manifold Model](manifold.md) | ISI, κD, TDA, NIG, SourceTargetGuard y módulos E9-E12 |
+| [Benchmark](benchmark.md) | Metodología, limitaciones y guía de replicación |
+| [Billing](billing.md) | Free/Pro flow, Polar, Mercado Pago, cuotas y webhooks |
+| [Security Notes](security.md) | API keys, rate limits, validación, privacidad y seguridad operativa |
+| [Benchmark JSON](benchmark_complete_20260429_172647.json) | Resultado completo del benchmark |
+| [Benchmark OTS Proof](benchmark_complete_20260429_172647.json.ots) | Prueba OpenTimestamps del benchmark |
+| [Security Policy](../SECURITY.md) | Reporte de vulnerabilidades, notas de seguridad y divulgación responsable |
+| [Contributing Guide](../CONTRIBUTING.md) | Setup de desarrollo, pull requests, testing y reglas de contribución |
+| [Code of Conduct](../CODE_OF_CONDUCT.md) | Estándares comunitarios y política de convivencia |
+| [Bug Report Template](../.github/ISSUE_TEMPLATE/bug_report.md) | Template de GitHub Issues para bugs |
+| [Feature Request Template](../.github/ISSUE_TEMPLATE/feature_request.md) | Template de GitHub Issues para mejoras |
+| [License](../LICENSE.md) | GPL-3.0 + Durante Invariance License |
 
 ---
 
@@ -221,6 +293,76 @@ ISI <  κD  -> posible ruptura de manifold / señal de alucinación
 ```
 
 La constante se utiliza junto con el **Invariant Similarity Index (ISI)** y módulos adicionales de detección.
+
+---
+
+<a id="es-lineas-tecnicas"></a>
+
+## Líneas técnicas actuales
+
+### 1. Structural Coherence Auditing
+
+Endpoints:
+
+```text
+POST /public/demo/audit
+POST /v1/diff
+POST /v1/audit
+POST /v1/batch
+```
+
+Propósito:
+
+- comparar texto fuente contra respuesta generada;
+- detectar ruptura semántica estructural;
+- detectar mutaciones de fechas, lugares, entidades, cantidades o afirmaciones críticas;
+- producir `isi`, `verdict`, `fired_modules` y `manipulation_alert`.
+
+### 2. Temporal Interaction Auditing
+
+Endpoints experimentales:
+
+```text
+GET  /v1/interaction/stability/example
+POST /v1/interaction/stability
+GET  /public/interaction/stats
+```
+
+Este módulo está basado en la línea de investigación:
+
+```text
+A Control-Theoretic Model for Stochastic Interaction under Hidden-State
+Uncertainty and Demand-Sensitive Response Degradation
+DOI: 10.5281/zenodo.20335612
+```
+
+Estados ocultos modelados:
+
+```text
+Open · Ambivalent · Saturated · Avoidant · Defensive
+```
+
+Campos principales:
+
+| Campo | Significado |
+|---|---|
+| `omega_t` | Concentración normalizada del belief state |
+| `belief_coherence_chi` | Alias retrocompatible de `omega_t` |
+| `dominant_state` | Estado oculto más probable bajo el modelo |
+| `dominant_probability` | Probabilidad del estado dominante |
+| `interaction_stability_sigma` | Concentración penalizada por demanda histórica |
+| `demand_peak` | Pico estimado de demanda histórica |
+| `request_id` | ID de trazabilidad |
+| `input_hash` | Hash operacional |
+| `content_fingerprint` | Fingerprint para reproducibilidad sin almacenar texto crudo |
+| `skipped_turns` | Turnos no soportados omitidos por el analizador |
+
+Advertencia interpretativa:
+
+```text
+omega_t mide concentración del belief state, no salud, bondad ni deseabilidad.
+Un omega alto con dominant_state=Defensive puede indicar degradación confiada.
+```
 
 ---
 
@@ -283,7 +425,7 @@ SAS/
 | E12 | Detección de cambio abrupto de tema |
 | FastAPI | Capa API para audit, diff, chat, health y administración |
 
-Para una explicación técnica más profunda, ver [docs/architecture.md](docs/architecture.md).
+Para una explicación técnica más profunda, ver [docs/architecture.md](architecture.md).
 
 ---
 
@@ -422,6 +564,15 @@ ADMIN_SECRET=change-this-admin-secret
 FREE_REQUESTS_PER_DAY=50
 MODULES_ENABLED=E9,E10,E11,E12
 CORS_ALLOW_ORIGINS=*
+AUTH_DB_PATH=/app/data/auth.db
+METRICS_DB_PATH=/app/data/metrics.db
+AUDIT_DB_PATH=/app/data/audit.db
+RATE_LIMIT_DB_PATH=/app/data/rate_limit.db
+INTERACTION_DB_PATH=/app/data/interaction.db
+AUDIT_SALT_SECRET=change-this-long-random-secret
+RATE_LIMIT_HASH_PEPPER=change-this-long-random-secret
+INTERACTION_HASH_PEPPER=change-this-long-random-secret
+ENABLE_INTERACTION_STABILITY=false
 ```
 
 No subir archivos `.env` a repositorios públicos.
@@ -539,11 +690,70 @@ curl -X POST https://sas-api.onrender.com/v1/chat \
   -d '{"message": "Explain what κD means in SAS."}'
 ```
 
+
+### Batch audit
+
+```bash
+curl -X POST https://sas-api.onrender.com/v1/batch \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "experimental": true,
+    "domain": "generic",
+    "pairs": [
+      {
+        "source": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
+        "response": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+      },
+      {
+        "source": "Water boils at 100 degrees Celsius at sea level.",
+        "response": "Water boils at 100 degrees Celsius at sea level."
+      }
+    ]
+  }'
+```
+
+### Interaction stability experimental
+
+```bash
+curl -X POST https://sas-api.onrender.com/v1/interaction/stability \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "conversation": [
+      {"role":"user","content":"Necesito esto urgente, es para ayer."},
+      {"role":"assistant","content":"Entendido, lo proceso."}
+    ]
+  }'
+```
+
+Campos esperados:
+
+```text
+status
+trajectory
+summary
+request_id
+executed_at
+input_hash
+content_fingerprint
+skipped_turns
+```
+
+### Stats públicas de interaction stability
+
+```bash
+curl "https://sas-api.onrender.com/public/interaction/stats?days=7"
+```
+
+Estas stats son agregadas. No publican texto crudo, API keys, hashes de API keys, request IDs, input hashes ni fingerprints.
+
 ### Endpoints públicos (sin key)
 
 ```bash
 curl https://sas-api.onrender.com/public/stats
 curl https://sas-api.onrender.com/public/activity?limit=10
+curl "https://sas-api.onrender.com/public/interaction/stats?days=7"
 curl https://sas-api.onrender.com/readyz
 ```
 
@@ -566,14 +776,55 @@ MODULES_ENABLED=E9,E10,E11,E12
 
 ---
 
+
+---
+
+<a id="es-privacidad-observabilidad"></a>
+
+## Privacidad y observabilidad
+
+SAS almacena metadata operativa para confiabilidad, prevención de abuso, reproducibilidad e investigación agregada.
+
+Para `/v1/interaction/stability`, SAS puede almacenar:
+
+- `request_id`;
+- timestamp;
+- hash corto de API key;
+- bucket de usuario/plan;
+- cantidad de turnos;
+- cantidad de turnos del asistente;
+- estado dominante final;
+- `omega_t` final;
+- `sigma` final;
+- pico de demanda;
+- flags de umbral/incertidumbre;
+- `input_hash`;
+- `content_fingerprint`;
+- latencia.
+
+SAS **no almacena texto crudo de conversación** en el store de observabilidad de interacción.
+
+Las stats públicas solo exponen agregados. No exponen:
+
+- texto crudo;
+- API keys;
+- hashes de API keys;
+- request IDs;
+- input hashes;
+- content fingerprints;
+- filas por usuario.
+
+Ver: [Privacy and Observability](../PRIVACY.md)
+
 <a id="es-zenodo"></a>
 
 ## Zenodo y registro
 
-- **Zenodo DOI:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
+- **Zenodo DOI principal SAS:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
+- **Zenodo DOI interaction stability:** `10.5281/zenodo.20335612`
 - **Registro TAD:** `EX-2026-18792778`
 - **Autor:** Gonzalo Emir Durante
-- **Licencia:** [GPL-3.0 + Durante Invariance License](LICENSE.md)
+- **Licencia:** [GPL-3.0 + Durante Invariance License](../LICENSE.md)
 - **API alojada:** [https://sas-api.onrender.com](https://sas-api.onrender.com)
 - **Cliente PyPI:** [https://pypi.org/project/sas-client/](https://pypi.org/project/sas-client/)
 
@@ -611,7 +862,7 @@ https://doi.org/10.5281/zenodo.19702379
 GPL-3.0 + Durante Invariance License
 ```
 
-Ver [LICENSE.md](LICENSE.md) para el texto completo.
+Ver [LICENSE.md](../LICENSE.md) para el texto completo.
 
 ---
 
@@ -637,7 +888,7 @@ uvicorn app.main:app --reload
 - Restringir CORS en producción.
 - Mantener API keys privadas.
 
-Para reportes de vulnerabilidad, ver [SECURITY.md](SECURITY.md).
+Para reportes de vulnerabilidad, ver [SECURITY.md](../SECURITY.md).
 
 ---
 
@@ -653,8 +904,39 @@ Limitaciones conocidas:
 - La detección de cambio de tema es conservadora para reducir falsos positivos.
 - Los resultados deben interpretarse como evidencia técnica, no como certificación legal.
 - El rendimiento puede variar en dominios, idiomas y datasets no representados en el benchmark actual.
+- Interaction stability produce constructos de modelo, no diagnósticos psicológicos ni determinaciones legales.
+- `omega_t` mide concentración del belief state, no bondad ni salud del estado.
+- Las stats públicas son agregadas y no deben interpretarse como identificación de usuarios.
 
 ---
+
+
+---
+
+<a id="es-roadmap"></a>
+
+## Roadmap
+
+### Corto plazo
+
+- Mantener smoke tests verdes.
+- Monitorear `funnel_report.py`.
+- Mantener `/public/interaction/stats` estable.
+- Mejorar documentación API y ejemplos de integración.
+
+### Producto
+
+- Node.js / TypeScript SDK.
+- Dashboard mínimo basado en métricas públicas agregadas.
+- CLI batch por archivo.
+- Reportes exportables con hash, timestamp y request ID.
+
+### Científico
+
+- Snapshot empírico de interaction stability al alcanzar volumen suficiente.
+- Calibración de parámetros de interaction stability.
+- Benchmark v2 con corpus narrativo y multilingüe.
+- Paquete de replicación externa.
 
 <a id="es-autor"></a>
 
@@ -692,6 +974,49 @@ curl https://sas-api.onrender.com/health
 ```
 
 FastAPI interactive documentation: https://sas-api.onrender.com/docs
+
+---
+
+<a id="en-current-operational-state"></a>
+
+## Current Operational State
+
+SAS currently operates as a public API with authentication, quotas, persistent rate limiting, observability, smoke tests, and SQLite-backed operational stores.
+
+Recently validated surfaces:
+
+```text
+/health                               -> ok
+/readyz                               -> ready
+/public/stats                         -> ok
+/public/activity                      -> ok
+/public/interaction/stats             -> ok
+/v1/diff                              -> active
+/v1/audit                             -> active
+/v1/batch                             -> active
+/v1/interaction/stability             -> active behind feature flag + API key
+```
+
+Databases checked by `/readyz`:
+
+| Store | Status | Use |
+|---|---|---|
+| `auth.db` | active | users, API keys, quotas |
+| `metrics.db` | active | request metrics and funnel reporting |
+| `audit.db` | active | audit trail and validation errors |
+| `rate_limit.db` | active | persistent rate-limit events |
+| `interaction.db` | active | aggregate interaction-stability observability |
+
+Main active surfaces:
+
+| Line | Endpoints |
+|---|---|
+| Structural Coherence Auditing | `/v1/diff`, `/v1/audit`, `/v1/batch`, `/public/demo/audit` |
+| Temporal Interaction Auditing | `/v1/interaction/stability`, `/v1/interaction/stability/example`, `/public/interaction/stats` |
+| Onboarding | `/public/request-key`, `/v1/whoami` |
+| Public observability | `/public/stats`, `/public/activity`, `/public/interaction/stats` |
+| System | `/health`, `/readyz`, `/integrity`, `/robots.txt` |
+| Hosted billing | Polar + Mercado Pago checkout/webhooks |
 
 ---
 
@@ -733,13 +1058,20 @@ sas --api-key YOUR_API_KEY diff "Python is a programming language." "A python is
 
 | Document | Description |
 |---|---|
-| [Security Policy](SECURITY.md) | Vulnerability reporting and responsible disclosure |
-| [Contributing Guide](CONTRIBUTING.md) | Development setup, pull requests, and contribution rules |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards |
-| [Architecture Overview](docs/architecture.md) | Detection pipeline, modules, and data flow |
-| [Benchmark JSON](docs/benchmark_complete_20260429_172647.json) | Full benchmark output |
-| [Benchmark OTS Proof](docs/benchmark_complete_20260429_172647.json.ots) | OpenTimestamps proof |
-| [License](LICENSE.md) | GPL-3.0 + Durante Invariance License |
+| [Main README](../README.md) | Project overview, public API, capabilities and roadmap |
+| [Privacy and Observability](../PRIVACY.md) | Data handling, hashes, fingerprints and public stats |
+| [API Reference](api.md) | Endpoints, auth, examples, errors and client guidance |
+| [Architecture Overview](architecture.md) | High-level design, detection pipeline and data flow |
+| [Manifold Model](manifold.md) | ISI, κD, TDA, NIG, SourceTargetGuard and E9-E12 |
+| [Benchmark](benchmark.md) | Methodology, limitations and replication guidance |
+| [Billing](billing.md) | Free/Pro flow, Polar, Mercado Pago, quotas and webhooks |
+| [Security Notes](security.md) | API keys, rate limits, validation, privacy and operational security |
+| [Benchmark JSON](benchmark_complete_20260429_172647.json) | Full benchmark output |
+| [Benchmark OTS Proof](benchmark_complete_20260429_172647.json.ots) | OpenTimestamps proof |
+| [Security Policy](../SECURITY.md) | Vulnerability reporting and responsible disclosure |
+| [Contributing Guide](../CONTRIBUTING.md) | Development setup, pull requests and contribution rules |
+| [Code of Conduct](../CODE_OF_CONDUCT.md) | Community standards |
+| [License](../LICENSE.md) | GPL-3.0 + Durante Invariance License |
 
 ---
 
@@ -769,6 +1101,76 @@ ISI <  κD  ->  potential manifold rupture / hallucination signal
 ```
 
 κD = 0.56, the **Durante Constant**, is the critical coherence threshold in the SAS pipeline.
+
+---
+
+<a id="en-technical-lines"></a>
+
+## Current technical lines
+
+### 1. Structural Coherence Auditing
+
+Endpoints:
+
+```text
+POST /public/demo/audit
+POST /v1/diff
+POST /v1/audit
+POST /v1/batch
+```
+
+Purpose:
+
+- compare source text against generated response;
+- detect structural semantic rupture;
+- detect mutations of dates, locations, entities, quantities or critical claims;
+- produce `isi`, `verdict`, `fired_modules` and `manipulation_alert`.
+
+### 2. Temporal Interaction Auditing
+
+Experimental endpoints:
+
+```text
+GET  /v1/interaction/stability/example
+POST /v1/interaction/stability
+GET  /public/interaction/stats
+```
+
+Research line:
+
+```text
+A Control-Theoretic Model for Stochastic Interaction under Hidden-State
+Uncertainty and Demand-Sensitive Response Degradation
+DOI: 10.5281/zenodo.20335612
+```
+
+Hidden-state model constructs:
+
+```text
+Open · Ambivalent · Saturated · Avoidant · Defensive
+```
+
+Key fields:
+
+| Field | Meaning |
+|---|---|
+| `omega_t` | Normalized belief-state concentration |
+| `belief_coherence_chi` | Backward-compatible alias of `omega_t` |
+| `dominant_state` | Most probable hidden-state construct |
+| `dominant_probability` | Probability of dominant state |
+| `interaction_stability_sigma` | Belief concentration penalized by historical demand |
+| `demand_peak` | Peak historical demand estimate |
+| `request_id` | Traceability ID |
+| `input_hash` | Operational hash |
+| `content_fingerprint` | Reproducibility fingerprint without storing raw text |
+| `skipped_turns` | Unsupported turns skipped by the analyzer |
+
+Interpretation warning:
+
+```text
+omega_t measures belief-state concentration, not desirability.
+High omega_t with dominant_state=Defensive can mean confident degradation.
+```
 
 ---
 
@@ -845,6 +1247,39 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
+
+
+---
+
+<a id="en-configuration"></a>
+
+## Configuration
+
+Example `.env`:
+
+```env
+ADMIN_SECRET=change-this-admin-secret
+FREE_REQUESTS_PER_DAY=50
+MODULES_ENABLED=E9,E10,E11,E12
+CORS_ALLOW_ORIGINS=*
+AUTH_DB_PATH=/app/data/auth.db
+METRICS_DB_PATH=/app/data/metrics.db
+AUDIT_DB_PATH=/app/data/audit.db
+RATE_LIMIT_DB_PATH=/app/data/rate_limit.db
+INTERACTION_DB_PATH=/app/data/interaction.db
+AUDIT_SALT_SECRET=change-this-long-random-secret
+RATE_LIMIT_HASH_PEPPER=change-this-long-random-secret
+INTERACTION_HASH_PEPPER=change-this-long-random-secret
+ENABLE_INTERACTION_STABILITY=false
+```
+
+Enable interaction stability:
+
+```env
+ENABLE_INTERACTION_STABILITY=true
+```
+
+Do not commit `.env` files.
 
 <a id="en-auth"></a>
 
@@ -943,11 +1378,70 @@ curl -X POST https://sas-api.onrender.com/v1/diff \
   }'
 ```
 
+
+### Batch audit
+
+```bash
+curl -X POST https://sas-api.onrender.com/v1/batch \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "experimental": true,
+    "domain": "generic",
+    "pairs": [
+      {
+        "source": "The Eiffel Tower is located in Paris, France, and was built in 1889.",
+        "response": "The Eiffel Tower is located in Berlin, Germany, and was built in 1950."
+      },
+      {
+        "source": "Water boils at 100 degrees Celsius at sea level.",
+        "response": "Water boils at 100 degrees Celsius at sea level."
+      }
+    ]
+  }'
+```
+
+### Experimental interaction stability
+
+```bash
+curl -X POST https://sas-api.onrender.com/v1/interaction/stability \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sas_xxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "conversation": [
+      {"role":"user","content":"Necesito esto urgente, es para ayer."},
+      {"role":"assistant","content":"Entendido, lo proceso."}
+    ]
+  }'
+```
+
+Expected fields:
+
+```text
+status
+trajectory
+summary
+request_id
+executed_at
+input_hash
+content_fingerprint
+skipped_turns
+```
+
+### Public interaction stats
+
+```bash
+curl "https://sas-api.onrender.com/public/interaction/stats?days=7"
+```
+
+These stats are aggregate-only. They do not publish raw text, API keys, API-key hashes, request IDs, input hashes or fingerprints.
+
 ### Public endpoints (no key required)
 
 ```bash
 curl https://sas-api.onrender.com/public/stats
 curl "https://sas-api.onrender.com/public/activity?limit=10"
+curl "https://sas-api.onrender.com/public/interaction/stats?days=7"
 curl https://sas-api.onrender.com/readyz
 ```
 
@@ -970,14 +1464,54 @@ MODULES_ENABLED=E9,E10,E11,E12
 
 ---
 
+
+---
+
+<a id="en-privacy-observability"></a>
+
+## Privacy and observability
+
+SAS stores operational metadata for reliability, abuse prevention, reproducibility and aggregate research.
+
+For `/v1/interaction/stability`, SAS may store:
+
+- `request_id`;
+- timestamp;
+- short hashed API-key identifier;
+- user/plan bucket;
+- turn counts;
+- final dominant state;
+- final `omega_t`;
+- final `sigma`;
+- demand peak;
+- threshold/uncertainty flags;
+- `input_hash`;
+- `content_fingerprint`;
+- latency.
+
+SAS does **not** store raw conversation text in the interaction observability store.
+
+Public stats expose aggregate data only. They do not expose:
+
+- raw text;
+- API keys;
+- API-key hashes;
+- request IDs;
+- input hashes;
+- content fingerprints;
+- per-user rows.
+
+See: [Privacy and Observability](../PRIVACY.md)
+
 <a id="en-zenodo"></a>
 
 ## Zenodo and Registration
 
-- **Zenodo DOI:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
+- **Main SAS DOI:** [10.5281/zenodo.19702379](https://doi.org/10.5281/zenodo.19702379)
+- **Interaction stability DOI:** `10.5281/zenodo.20335612`
 - **TAD Registry:** `EX-2026-18792778`
 - **Author:** Gonzalo Emir Durante
-- **License:** [GPL-3.0 + Durante Invariance License](LICENSE.md)
+- **License:** [GPL-3.0 + Durante Invariance License](../LICENSE.md)
 - **Hosted API:** [https://sas-api.onrender.com](https://sas-api.onrender.com)
 - **PyPI Client:** [https://pypi.org/project/sas-client/](https://pypi.org/project/sas-client/)
 
@@ -1015,7 +1549,7 @@ https://doi.org/10.5281/zenodo.19702379
 GPL-3.0 + Durante Invariance License
 ```
 
-See [LICENSE.md](LICENSE.md) for the full text.
+See [LICENSE.md](../LICENSE.md) for the full text.
 
 ---
 
@@ -1031,6 +1565,25 @@ uvicorn app.main:app --reload
 
 ---
 
+
+---
+
+<a id="en-operations"></a>
+
+## Operations and reporting
+
+```bash
+python scripts/funnel_report.py --hours 24 --show-recent
+```
+
+Or:
+
+```bash
+python scripts/funnel_report.py --days 3 --show-recent --json
+```
+
+The report separates infrastructure, discovery, trial, conversion, authenticated usage, validation errors, audit events, rate-limit events and interaction-stability usage.
+
 <a id="en-security"></a>
 
 ## Security Notes
@@ -1041,7 +1594,7 @@ uvicorn app.main:app --reload
 - Restrict CORS origins in production.
 - Keep API keys private.
 
-For vulnerability reports, see [SECURITY.md](SECURITY.md).
+For vulnerability reports, see [SECURITY.md](../SECURITY.md).
 
 ---
 
@@ -1057,8 +1610,39 @@ Known limitations:
 - Topic-shift detection is conservative to reduce false positives.
 - Results should be interpreted as technical evidence, not as legal certification.
 - Benchmark performance may vary across domains and languages not represented in the current evaluation.
+- Interaction stability outputs are model constructs, not psychological diagnoses or legal determinations.
+- `omega_t` measures belief-state concentration, not state desirability.
+- Public stats are aggregate and must not be interpreted as user identification.
 
 ---
+
+
+---
+
+<a id="en-roadmap"></a>
+
+## Roadmap
+
+### Short term
+
+- Keep smoke tests green.
+- Monitor `funnel_report.py`.
+- Keep `/public/interaction/stats` stable.
+- Improve API documentation and developer examples.
+
+### Product
+
+- Node.js / TypeScript SDK.
+- Minimal dashboard based on public aggregate metrics.
+- CLI batch by file.
+- Exportable reports with hash, timestamp and request ID.
+
+### Scientific
+
+- Empirical interaction-stability snapshot after enough real analyses.
+- Calibration of interaction-stability parameters.
+- Benchmark v2 with narrative and multilingual corpora.
+- External replication package.
 
 <a id="en-author"></a>
 
