@@ -24,6 +24,10 @@
 
 _Last automated update / Última actualización automática:_ `2026-05-12T19:41:56+00:00`
 
+> ⚠️ This block is updated by an automated workflow and may lag behind current activity. For the live state, use `/readyz`, `/public/stats`, `/public/activity`, and `/public/interaction/stats`.
+>
+> ⚠️ Este bloque se actualiza mediante un workflow automatizado y puede quedar retrasado respecto de la actividad actual. Para el estado vivo, usar `/readyz`, `/public/stats`, `/public/activity` y `/public/interaction/stats`.
+
 ### English
 
 | Signal | Value |
@@ -372,23 +376,21 @@ Un omega alto con dominant_state=Defensive puede indicar degradación confiada.
 
 ```text
 SAS/
-├── .gitignore
-├── LICENSE.md
-├── README.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── .github/
-│   └── ISSUE_TEMPLATE/
-│       ├── bug_report.md
-│       └── feature_request.md
-├── docs/
-│   ├── architecture.md
-│   ├── benchmark_complete_20260429_172647.json
-│   └── benchmark_complete_20260429_172647.json.ots
-├── src/
-├── tests/
+├── app/
+│   ├── main.py                      # FastAPI app, middleware, startup, readiness
+│   ├── routers/                     # audit, diff, batch, interaction, public, billing, auth
+│   ├── services/                    # detector, stores, auth, metrics, audit, interaction observability
+│   ├── db/                          # SQLite: auth, usage, payments
+│   └── middleware/                  # security headers, auth, rate limiting, validation logging
+├── core/                            # scientific core: semantic_diff, TDA, NIG
+├── docs/                            # architecture, API, benchmark, OTS proof, manifold model
+├── scripts/                         # funnel_report.py and operational tooling
+├── tests/                           # tests and benchmark runner
+├── .github/workflows/               # smoke tests and CI
+├── Dockerfile
 ├── docker-compose.yml
+├── PRIVACY.md
+├── README.md
 └── requirements.txt
 ```
 
@@ -402,13 +404,16 @@ SAS/
 SAS/
 ├── app/                          # Código principal de la API
 │   ├── main.py                   # FastAPI app
-│   ├── routers/                  # Endpoints: audit, diff, chat, demo, billing
-│   ├── services/                 # Motor core: TDA + NIG + módulos E9-E12
-│   ├── db/                       # SQLite: auth_store, rate limit
-│   └── middleware/               # Auth, rate limiting
+│   ├── routers/                  # audit, diff, batch, interaction, public, billing
+│   ├── services/                 # detector, stores, auth, metrics, audit, interaction observability
+│   ├── db/                       # SQLite: auth, usage, payments
+│   └── middleware/               # auth, validation, rate limiting, security headers
+├── core/                         # scientific core: semantic_diff, TDA, NIG
+├── scripts/                      # funnel_report.py and operational tooling
 ├── tests/benchmark_runner.py
 ├── docker-compose.yml
 ├── Dockerfile
+├── PRIVACY.md
 └── requirements.txt
 ```
 
@@ -464,6 +469,8 @@ Hash SHA-256 para trazabilidad:
 | ISI promedio en alucinaciones | 0.072993 |
 | ISI promedio en textos limpios | 1.000000 |
 
+> Resultados específicos del dataset. Ver [benchmark.md](benchmark.md) para alcance, metodología y detalles de replicación.
+
 ### Matriz de confusión
 
 |  | Alucinación real | Texto limpio real |
@@ -493,6 +500,7 @@ Cualquier persona puede autoalojar su propia instancia de SAS bajo los términos
 | :--- | :--- | :--- |
 | **SAS Free** | 50 requests/día. API Key automática. Ideal para pruebas, desarrollo individual y evaluación técnica inicial. | **Gratis** |
 | **SAS Developer / Pro** | 10.000 requests/mes. API Key. Acceso a la API pública alojada. Soporte básico por email. | **99 USD/mes** |
+| **SAS Team** | 50.000 requests/mes. API Key. Acceso alojado para equipos. Soporte prioritario. | **299 USD/mes** |
 | **SAS Enterprise Cloud** | Volumen alto o paquete personalizado. Soporte directo. Integración privada. SLA según acuerdo comercial. | **Desde 1.500 USD/mes** |
 | **SAS On-Premise License** | Despliegue privado en infraestructura del cliente. Licencia comercial. Integración interna y soporte de implementación. | **Desde 15.000 USD/año** |
 | **Piloto técnico** | Auditoría inicial, integración guiada, informe técnico y validación sobre casos de uso del cliente. | **1.500–3.000 USD, pago único** |
@@ -1188,6 +1196,8 @@ High omega_t with dominant_state=Defensive can mean confident degradation.
 | False Positives | 0 |
 | κD | 0.56 |
 
+> Results are dataset-specific. See [benchmark.md](benchmark.md) for scope and replication details.
+
 SHA-256: `0713acbbf50e1a0054f545e5eb68078744f9c5a09d4bc370b5224bb81183a6fe`
 
 ---
@@ -1202,6 +1212,7 @@ SAS is open source under **GPL-3.0 + Durante Invariance License**. The plans bel
 | :--- | :--- | :--- |
 | **SAS Free** | 50 requests/day. Automatic API Key. Ideal for testing and evaluation. | **Free** |
 | **SAS Developer / Pro** | 10,000 requests/month. API Key. Hosted API access. Basic email support. | **USD 99/month** |
+| **SAS Team** | 50,000 requests/month. Hosted API access for teams. Priority support. | **USD 299/month** |
 | **SAS Enterprise Cloud** | High-volume or custom package. Direct support. Private integration. SLA by agreement. | **From USD 1,500/month** |
 | **SAS On-Premise License** | Private deployment on customer infrastructure. Commercial license. | **From USD 15,000/year** |
 | **Technical Pilot** | Initial audit, guided integration, technical report, and use-case validation. | **USD 1,500–3,000 one-time** |
