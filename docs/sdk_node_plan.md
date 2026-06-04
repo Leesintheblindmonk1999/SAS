@@ -1,14 +1,33 @@
 # SAS Node SDK Technical Specification
 
-Technical plan for the first Node.js / TypeScript SDK for **SAS — Symbiotic Autoprotection System**.
+Technical specification and implementation record for the first Node.js / TypeScript SDK for **SAS — Symbiotic Autoprotection System**.
 
-This document defines the intended behavior, scope, API surface, error model, security rules, and release strategy for the initial Node SDK implementation.
+This document defines the intended behavior, scope, API surface, error model, security rules, release strategy, and final v0.1.0 publication state for the initial Node SDK implementation.
 
 Target implementation phase:
 
 ```text
-I0 -> specification
-I1 -> implementation
+I0 -> specification completed
+I1 -> implementation completed
+v0.1.0 -> published on npm as sas-audit-client
+```
+
+Current public package:
+
+```text
+npm install sas-audit-client
+```
+
+Package registry:
+
+```text
+https://www.npmjs.com/package/sas-audit-client
+```
+
+Repository:
+
+```text
+https://github.com/Leesintheblindmonk1999/sas-js
 ```
 
 ---
@@ -96,7 +115,21 @@ The `domain` field is also excluded from v0.1.0 request types because the curren
 
 ## 3. Package name candidates
 
-Final npm package availability must be checked before implementation and publication.
+Final npm package availability was checked before publication.
+
+Published package:
+
+```text
+sas-audit-client
+```
+
+Published version:
+
+```text
+0.1.0
+```
+
+The originally preferred scoped package `@sas-audit/sdk` could not be published because the npm scope `@sas-audit` was not available to the publisher account at release time. The unscoped fallback `sas-audit-client` was available and was published successfully.
 
 Candidate package names:
 
@@ -110,10 +143,16 @@ sas-sdk
 symbiotic-autoprotection-system
 ```
 
-Preferred candidate:
+Original preferred candidate:
 
 ```text
 @sas-audit/sdk
+```
+
+Final published package:
+
+```text
+sas-audit-client
 ```
 
 Reasoning:
@@ -126,10 +165,10 @@ Reasoning:
 Example:
 
 ```ts
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 ```
 
-Fallback candidate if scoped package is not available:
+Fallback candidate if scoped package is not available — selected for v0.1.0:
 
 ```text
 sas-audit-client
@@ -193,8 +232,11 @@ Recommended package output:
 ```text
 dist/
 ├── index.js
+├── index.js.map
+├── index.cjs
+├── index.cjs.map
 ├── index.d.ts
-└── index.cjs   # optional
+└── index.d.cts
 ```
 
 Recommended `package.json` fields:
@@ -234,6 +276,17 @@ Timeout implementation:
 
 The SDK should implement request timeouts using `AbortController`, available in Node.js 18+.
 
+User-Agent:
+
+The v0.1.0 implementation sends:
+
+```text
+user-agent: sas-node-sdk/0.1.0
+```
+
+This is used only as a technical SDK identifier. It does not add telemetry and does not transmit API keys or local environment details.
+
+
 ---
 
 ## 5. Installation
@@ -243,26 +296,28 @@ Once published:
 ### npm
 
 ```bash
-npm install @sas-audit/sdk
+npm install sas-audit-client
 ```
 
 ### yarn
 
 ```bash
-yarn add @sas-audit/sdk
+yarn add sas-audit-client
 ```
 
 ### pnpm
 
 ```bash
-pnpm add @sas-audit/sdk
+pnpm add sas-audit-client
 ```
 
-If the fallback package name is used:
+The package was published under the fallback package name:
 
 ```bash
 npm install sas-audit-client
 ```
+
+The scoped name `@sas-audit/sdk` remains a possible future migration path if the npm scope is created and configured.
 
 Development install from local source:
 
@@ -350,7 +405,7 @@ Missing SAS API key. Pass apiKey to SASClient or set SAS_API_KEY.
 Default hosted client:
 
 ```ts
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 
 const client = new SASClient({
   apiKey: process.env.SAS_API_KEY
@@ -394,6 +449,7 @@ export interface RetryOptions {
   backoffMs: number;
   respectRetryAfter?: boolean;
   retryOnStatuses?: number[];
+  maxRetryDelayMs?: number;
 }
 ```
 
@@ -404,7 +460,8 @@ Recommended retry defaults when enabled:
   attempts: 2,
   backoffMs: 500,
   respectRetryAfter: true,
-  retryOnStatuses: [429, 500, 502, 503, 504]
+  retryOnStatuses: [429, 500, 502, 503, 504],
+  maxRetryDelayMs: 30_000
 }
 ```
 
@@ -866,6 +923,7 @@ export interface RetryOptions {
   backoffMs: number;
   respectRetryAfter?: boolean;
   retryOnStatuses?: number[];
+  maxRetryDelayMs?: number;
 }
 ```
 
@@ -873,12 +931,18 @@ export interface RetryOptions {
 
 ### 9.2 Common response fields
 
-```ts
-export interface SASBaseResponse {
-  status?: string;
-  request_id?: string;
-  kappa_d?: number;
-}
+The draft specification considered a shared `SASBaseResponse` helper.
+
+Final v0.1.0 implementation note:
+
+```text
+SASBaseResponse is not exported in sas-audit-client@0.1.0.
+```
+
+Reason:
+
+```text
+No public response interface extends it, and exporting unused helper types would expand the public API unnecessarily.
 ```
 
 ---
@@ -1003,7 +1067,9 @@ export interface DiffRequest {
   experimental?: boolean;
 }
 
-export interface DiffApiRequest {
+// Internal implementation mapping only.
+// Not exported from sas-audit-client@0.1.0.
+interface DiffApiRequest {
   text_a: string;
   text_b: string;
   experimental?: boolean;
@@ -1198,7 +1264,9 @@ export interface InteractionStabilityRequest {
   normalizeDemand?: boolean;
 }
 
-export interface InteractionStabilityApiRequest {
+// Internal implementation mapping only.
+// Not exported from sas-audit-client@0.1.0.
+interface InteractionStabilityApiRequest {
   conversation: InteractionTurn[];
   gamma?: number;
   window?: number;
@@ -1336,21 +1404,22 @@ Recommended exported error classes:
 
 ```ts
 export class SASError extends Error {
-  readonly name = "SASError";
+  constructor(message: string) {
+    super(message);
+    this.name = new.target.name;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
 }
 
 export class SASNetworkError extends SASError {
-  readonly name = "SASNetworkError";
-  cause?: unknown;
+  override cause?: unknown;
 }
 
 export class SASTimeoutError extends SASNetworkError {
-  readonly name = "SASTimeoutError";
   timeoutMs: number;
 }
 
 export class SASAPIError extends SASError {
-  readonly name = "SASAPIError";
   status: number;
   statusText: string;
   body: unknown;
@@ -1360,26 +1429,11 @@ export class SASAPIError extends SASError {
   rateLimit?: SASRateLimitHeaders;
 }
 
-export class SASAuthenticationError extends SASAPIError {
-  readonly name = "SASAuthenticationError";
-}
-
-export class SASValidationError extends SASAPIError {
-  readonly name = "SASValidationError";
-}
-
-export class SASRateLimitError extends SASAPIError {
-  readonly name = "SASRateLimitError";
-  // retryAfter and rateLimit are inherited from SASAPIError.
-}
-
-export class SASServerError extends SASAPIError {
-  readonly name = "SASServerError";
-}
-
-export class SASConfigurationError extends SASError {
-  readonly name = "SASConfigurationError";
-}
+export class SASAuthenticationError extends SASAPIError {}
+export class SASValidationError extends SASAPIError {}
+export class SASRateLimitError extends SASAPIError {}
+export class SASServerError extends SASAPIError {}
+export class SASConfigurationError extends SASError {}
 ```
 
 Error mapping:
@@ -1490,6 +1544,7 @@ Behavior:
 * do not retry 429 by default;
 * expose retry information;
 * if retries are enabled and `respectRetryAfter` is true, use `Retry-After` when practical;
+* cap `Retry-After` delay with `maxRetryDelayMs` to avoid unexpectedly long sleeps;
 * never retry indefinitely;
 * never retry invalid requests.
 
@@ -1520,6 +1575,14 @@ const client = new SASClient({
   }
 });
 ```
+
+When retry is enabled and `retryOnStatuses` is omitted, the v0.1.0 implementation retries transient server errors by default:
+
+```text
+500, 502, 503, 504
+```
+
+HTTP errors are never retried unless retry is explicitly enabled. Validation and authentication errors are not retried.
 
 Retry rules:
 
@@ -1561,7 +1624,7 @@ Non-retryable errors:
 ### 13.1 Basic TypeScript usage
 
 ```ts
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 
 const client = new SASClient({
   apiKey: process.env.SAS_API_KEY
@@ -1583,7 +1646,7 @@ console.log(result.manipulation_alert);
 ### 13.2 JavaScript usage
 
 ```js
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 
 const client = new SASClient({
   apiKey: process.env.SAS_API_KEY
@@ -1602,7 +1665,7 @@ console.log(result);
 ### 13.3 Self-hosted API
 
 ```ts
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 
 const client = new SASClient({
   baseUrl: "http://localhost:8000",
@@ -1698,7 +1761,7 @@ import {
   SASValidationError,
   SASAuthenticationError,
   SASAPIError
-} from "@sas-audit/sdk";
+} from "sas-audit-client";
 
 const client = new SASClient({
   apiKey: process.env.SAS_API_KEY
@@ -1796,6 +1859,39 @@ The SDK should be safe for server-side logs by default.
 
 The SDK implementation must include unit tests and integration tests.
 
+Current v0.1.0 validation status:
+
+```text
+npm run typecheck      -> passed
+npm test               -> 21 passed, 6 skipped integration tests
+npm run build          -> ESM + CJS + DTS generated
+npm run pack:check     -> tarball contains dist/, README.md, LICENSE, package.json
+npm audit --omit=dev   -> 0 vulnerabilities
+```
+
+Post-publication registry install was validated with:
+
+```bash
+npm install sas-audit-client
+```
+
+and:
+
+```js
+import { SASClient } from "sas-audit-client";
+
+const client = new SASClient();
+
+console.log(await client.health());
+```
+
+Expected result:
+
+```js
+{ status: "ok", kappa_d: 0.56 }
+```
+
+
 ### 15.1 Unit tests
 
 Required unit tests:
@@ -1805,6 +1901,10 @@ Required unit tests:
 * constructor API key precedence;
 * `SAS_API_KEY` env fallback;
 * `SAS_KEY` env fallback;
+* `Retry-After` delay cap with `maxRetryDelayMs`;
+* `User-Agent` header;
+* custom `X-API-Key` header removal and constructor/env key precedence;
+* `SAS_KEY` fallback behavior;
 * missing API key error for authenticated methods;
 * no API key required for public methods;
 * `diff()` maps `textA` / `textB` to `text_a` / `text_b`;
@@ -1906,6 +2006,8 @@ Initial release:
 v0.1.0
 ```
 
+v0.1.0 was published successfully on npm as `sas-audit-client@0.1.0`.
+
 Release scope:
 
 * TypeScript client;
@@ -1931,31 +2033,31 @@ or:
 sas-node-sdk
 ```
 
-Recommended package:
+Published package:
 
 ```text
-@sas-audit/sdk
+sas-audit-client
 ```
 
-subject to npm availability.
+The scoped package `@sas-audit/sdk` was attempted first, but npm returned `Scope not found`. The v0.1.0 release was published successfully using the fallback unscoped package name.
 
 ### 16.1 Pre-release checklist
 
 Before publishing:
 
-* [ ] Confirm package name availability.
-* [ ] Confirm license.
-* [ ] Confirm no secrets in repo.
-* [ ] Confirm `npm test` passes.
-* [ ] Confirm `npm run build` passes.
-* [ ] Confirm type declarations generated.
-* [ ] Confirm examples work.
-* [ ] Confirm `SAS_API_KEY` is not logged.
-* [ ] Confirm README includes installation and quick start.
-* [ ] Confirm package exports work in TypeScript.
-* [ ] Confirm package exports work in JavaScript.
-* [ ] Confirm Node.js 18 compatibility.
-* [ ] Confirm package tarball contents with `npm pack --dry-run`.
+* [x] Confirm package name availability.
+* [x] Confirm license.
+* [x] Confirm no secrets in repo.
+* [x] Confirm `npm test` passes.
+* [x] Confirm `npm run build` passes.
+* [x] Confirm type declarations generated.
+* [x] Confirm examples work.
+* [x] Confirm `SAS_API_KEY` is not logged.
+* [x] Confirm README includes installation and quick start.
+* [x] Confirm package exports work in TypeScript.
+* [x] Confirm package exports work in JavaScript.
+* [x] Confirm Node.js 18 compatibility.
+* [x] Confirm package tarball contents with `npm pack --dry-run`.
 
 ### 16.2 Publish
 
@@ -1965,16 +2067,28 @@ Dry run:
 npm pack --dry-run
 ```
 
-Publish public scoped package:
+Scoped package attempt:
 
 ```bash
 npm publish --access public
 ```
 
-If unscoped package:
+Result:
+
+```text
+E404 Scope not found for @sas-audit/sdk
+```
+
+Final successful unscoped publication:
 
 ```bash
 npm publish
+```
+
+Published package:
+
+```text
+sas-audit-client@0.1.0
 ```
 
 ### 16.3 Post-release validation
@@ -1985,13 +2099,13 @@ After release:
 mkdir /tmp/sas-sdk-test
 cd /tmp/sas-sdk-test
 npm init -y
-npm install @sas-audit/sdk
+npm install sas-audit-client
 ```
 
 Create `test.mjs`:
 
 ```js
-import { SASClient } from "@sas-audit/sdk";
+import { SASClient } from "sas-audit-client";
 
 const client = new SASClient();
 
@@ -2026,6 +2140,65 @@ Rules:
 
 ---
 
+## 16.5 Implementation status
+
+Current implementation repository:
+
+```text
+https://github.com/Leesintheblindmonk1999/sas-js
+```
+
+Current npm package:
+
+```text
+https://www.npmjs.com/package/sas-audit-client
+```
+
+Published version:
+
+```text
+0.1.0
+```
+
+Release validation completed:
+
+| Check | Status |
+|---|---|
+| TypeScript typecheck | Passed |
+| Unit tests | 21 passed |
+| Integration tests | 6 skipped by default unless `SAS_API_KEY` is present |
+| Build | ESM + CJS + DTS generated |
+| Package dry run | Passed |
+| Runtime audit | `npm audit --omit=dev` returned 0 vulnerabilities |
+| Local tarball install | Passed |
+| Real npm registry install | Passed |
+| `client.health()` against hosted API | Passed |
+
+Package contents:
+
+```text
+LICENSE
+README.md
+dist/index.cjs
+dist/index.cjs.map
+dist/index.d.cts
+dist/index.d.ts
+dist/index.js
+dist/index.js.map
+package.json
+```
+
+The npm package intentionally excludes:
+
+```text
+src/
+tests/
+examples/
+node_modules/
+```
+
+---
+
 ## 17. Future versions
 
 Future versions may include:
@@ -2039,6 +2212,7 @@ Potential additions:
 * stricter runtime validation;
 * helper for request-key flow;
 * richer examples;
+* optional scoped-package migration to `@sas-audit/sdk` if the npm scope is created;
 * browser-safe public-only client;
 * improved typed response narrowing by verdict.
 
