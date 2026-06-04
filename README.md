@@ -4,6 +4,7 @@
 [![Landing Page](https://img.shields.io/badge/🌐-Landing_Page-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
 [![API Online](https://img.shields.io/badge/API-online-brightgreen)](https://sas-api.onrender.com)
 [![PyPI](https://img.shields.io/pypi/v/sas-client?label=sas-client&color=blue)](https://pypi.org/project/sas-client/)
+[![npm](https://img.shields.io/npm/v/sas-audit-client?label=sas-audit-client&color=red)](https://www.npmjs.com/package/sas-audit-client)
 [![API Docs](https://img.shields.io/badge/API-FastAPI-009688)](https://sas-api.onrender.com/docs)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](requirements.txt)
 [![License](https://img.shields.io/badge/license-GPL--3.0%20%2B%20Durante%20Invariance-blue)](LICENSE.md)
@@ -21,6 +22,7 @@ It provides an API and research framework for auditing:
 - hallucination-risk signals;
 - batch comparison workflows;
 - experimental temporal interaction stability;
+- JavaScript / TypeScript integration through the published Node SDK `sas-audit-client`;
 - operational traceability without storing raw submitted content.
 
 The core structural signal is the **Invariant Similarity Index (ISI)** compared against **κD = 0.56** — the Durante Constant.
@@ -53,6 +55,68 @@ Landing page:
 ```text
 https://leesintheblindmonk1999.github.io/sas-landing/
 ```
+
+---
+
+## Official clients and SDKs
+
+SAS now has two public developer clients:
+
+| Client | Package | Runtime | Status |
+|---|---|---|---|
+| Python CLI / client | [`sas-client`](https://pypi.org/project/sas-client/) | Python 3.10+ | Published on PyPI |
+| Node.js / TypeScript SDK | [`sas-audit-client`](https://www.npmjs.com/package/sas-audit-client) | Node.js 18+ | Published on npm as `0.1.0` |
+
+### Node.js / TypeScript SDK
+
+Install:
+
+```bash
+npm install sas-audit-client
+```
+
+Minimal usage:
+
+```js
+import { SASClient } from "sas-audit-client";
+
+const client = new SASClient();
+
+console.log(await client.health());
+```
+
+Authenticated usage:
+
+```js
+import { SASClient } from "sas-audit-client";
+
+const client = new SASClient({
+  apiKey: process.env.SAS_API_KEY
+});
+
+const result = await client.diff({
+  textA: "The Eiffel Tower is located in Paris, France, and was completed in 1889.",
+  textB: "The Eiffel Tower is located in Berlin, Germany, and was completed in 1950.",
+  experimental: true
+});
+
+console.log(result.verdict);
+console.log(result.isi);
+```
+
+SDK repository:
+
+```text
+https://github.com/Leesintheblindmonk1999/sas-js
+```
+
+npm package:
+
+```text
+https://www.npmjs.com/package/sas-audit-client
+```
+
+The SDK is TypeScript-first, JavaScript-compatible, ESM/CJS packaged, uses native `fetch`, supports Node.js 18+, and does not store API keys.
 
 ---
 
@@ -92,6 +156,25 @@ sas demo-audit \
   "The Eiffel Tower is in Berlin, Germany. It was built in 1950."
 ```
 
+Or from Node.js / TypeScript:
+
+```bash
+npm install sas-audit-client
+```
+
+```js
+import { SASClient } from "sas-audit-client";
+
+const client = new SASClient();
+
+const result = await client.demoAudit({
+  source: "The Eiffel Tower is located in Paris, France, and was completed in 1889.",
+  response: "The Eiffel Tower is located in Berlin, Germany, and was completed in 1950."
+});
+
+console.log(result.verdict);
+```
+
 ---
 
 ## Get a Free API key
@@ -111,6 +194,18 @@ sas whoami
 
 sas diff "The contract is governed by Argentine law." \
          "The contract is NOT governed by Argentine law."
+```
+
+Node.js / TypeScript:
+
+```js
+import { SASClient } from "sas-audit-client";
+
+const client = new SASClient({
+  apiKey: process.env.SAS_API_KEY
+});
+
+console.log(await client.whoami());
 ```
 
 Hosted Free plan: **50 requests/day**, no credit card.
@@ -190,6 +285,8 @@ curl -X POST https://sas-api.onrender.com/v1/batch \
 ```
 
 The endpoint is API-key protected, payload-limited, audited, and covered by smoke tests.
+
+The Node SDK v0.1.0 intentionally omits the optional `domain` field from `diff()`, `audit()`, and `batch()` request types until domain-specific routing is a stable public contract.
 
 ---
 
@@ -310,6 +407,14 @@ curl "https://sas-api.onrender.com/public/interaction/stats"
 ```
 
 Public endpoints expose only aggregate and anonymized activity. No raw IPs, API keys, emails, or request bodies are published.
+
+Published developer packages:
+
+```text
+PyPI: sas-client
+npm:  sas-audit-client@0.1.0
+```
+
 
 ---
 
@@ -503,6 +608,7 @@ ENABLE_INTERACTION_STABILITY=true
 | [Privacy and Observability](PRIVACY.md) | Data handling, hashes, fingerprints, public stats |
 | [Manifold Model](docs/manifold.md) | ISI, κD, TDA, NIG, SourceTargetGuard, E9-E12 |
 | [API Reference](docs/api.md) | Endpoints, CLI, auth, errors, and examples |
+| [Node SDK Plan](docs/sdk_node_plan.md) | Technical specification and implementation record for the Node.js / TypeScript SDK |
 | [Billing](docs/billing.md) | Free/Pro flow, Polar, Mercado Pago, quotas |
 | [Benchmark](docs/benchmark.md) | Methodology, limitations, replication guidance |
 | [Security Notes](docs/security.md) | API keys, privacy, validation, rate limits, billing security |
@@ -540,7 +646,7 @@ ENABLE_INTERACTION_STABILITY=true
 ### Product expansion
 
 - Minimal usage dashboard.
-- Node.js / TypeScript SDK.
+- Node.js / TypeScript SDK — completed as [`sas-audit-client@0.1.0`](https://www.npmjs.com/package/sas-audit-client); future work continues with examples, integrations, and ecosystem documentation.
 - CLI support for batch files and interaction-stability calls.
 - Signed PDF audit report with timestamp, hash, and provenance.
 
@@ -560,6 +666,7 @@ ENABLE_INTERACTION_STABILITY=true
 | [`SAS`](https://github.com/Leesintheblindmonk1999/SAS) | Main API, core engine, benchmark, docs, self-hosting |
 | [`sas-landing`](https://github.com/Leesintheblindmonk1999/sas-landing) | Public legitimacy layer: benchmark, API status, demo, activity feed |
 | [`sas-client`](https://github.com/Leesintheblindmonk1999/sas-client) | Official Python client and CLI |
+| [`sas-js`](https://github.com/Leesintheblindmonk1999/sas-js) | Official Node.js / TypeScript SDK, published on npm as [`sas-audit-client`](https://www.npmjs.com/package/sas-audit-client) |
 
 ---
 
