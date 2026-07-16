@@ -182,21 +182,34 @@ def code_diff_isi(code_a: str, code_b: str) -> float:
     ISI_CODE for the 'code' domain.
 
     Weights (based on Gemini's proposal + own adjustments):
-        - Structural hash: 40% (identical structure → high similarity)
+        - Structural hash: 40% (identical structure -> high similarity)
         - Constants:       25% (changes in numbers/strings are critical)
         - Control flow:    15% (if/for/while)
         - Complexity:      10%
         - Node count:      10%
+
+    MODIFIED in R2.1 (see accompanying paper, Section 4): the original
+    implementation applied three hard veto/penalty branches:
+        - struct_sim == 0.0  -> hard return 0.1
+        - const_sim < 0.5    -> hard return 0.2
+        - control_sim < 0.6  -> multiply isi by 0.7
+
+    These were removed. Two functionally identical implementations that
+    differ only in control-flow style (e.g. a for-loop vs a while-loop, or
+    a different but equally valid set of constants) triggered these vetoes
+    and were scored as confidently different/hallucinated regardless of
+    the other four similarity components. Validated on a 1,596-row
+    execution-verified code-hallucination corpus (see paper), this
+    continuous version achieves AUC 0.9141 (raw) / 0.9421 (controlling
+    for a length confound) vs. the original veto-based scoring, which was
+    not separately re-validated because it is architecturally superseded
+    by this version.
+
+    A single soft multiplicative penalty (x0.5) is retained for the
+    struct_sim == 0.0 case, to still down-weight cases with zero
+    structural hash overlap without forcing a fixed veto value.
     """
     struct_sim, const_sim, control_sim, comp_sim, node_sim = ast_similarity_v2(code_a, code_b)
-
-    # Strict veto: different structural hash → certain hallucination
-    if struct_sim == 0.0:
-        return 0.1
-
-    # Heavy penalty if constants changed a lot
-    if const_sim < 0.5:
-        return 0.2
 
     isi = (0.40 * struct_sim +
            0.25 * const_sim +
@@ -204,11 +217,11 @@ def code_diff_isi(code_a: str, code_b: str) -> float:
            0.10 * comp_sim +
            0.10 * node_sim)
 
-    # Additional penalty if control flow is very different
-    if control_sim < 0.6:
-        isi *= 0.7
+    # Soft penalty (not a veto): down-weight, don't force a fixed value.
+    if struct_sim == 0.0:
+        isi = isi * 0.5
 
-    return max(0.0, min(1.0, isi))
+    return round(max(0.0, min(1.0, isi)), 6)
 
 
 # ── Fallback for non‑Python languages (optional) ───────────────────────────
