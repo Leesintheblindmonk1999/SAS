@@ -2,6 +2,8 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19702379.svg)](https://doi.org/10.5281/zenodo.19702379)
 [![R0 Audit](https://img.shields.io/badge/R0%20Audit-Zenodo%2020647532-blueviolet)](https://zenodo.org/records/20647532)
+[![R1-D](https://img.shields.io/badge/R1--D-Zenodo%2021282332-blueviolet)](https://zenodo.org/records/21282332)
+[![R2.1](https://img.shields.io/badge/R2.1-Zenodo%2021365707-blueviolet)](https://doi.org/10.5281/zenodo.21365707)
 [![Landing Page](https://img.shields.io/badge/🌐-Landing_Page-0a0e17?style=flat&logo=github)](https://leesintheblindmonk1999.github.io/sas-landing/)
 [![API Online](https://img.shields.io/badge/API-online-brightgreen)](https://sas-api.onrender.com)
 [![PyPI](https://img.shields.io/pypi/v/sas-client?label=sas-client&color=blue)](https://pypi.org/project/sas-client/)
@@ -89,6 +91,30 @@ response = A_clean
 ```
 
 This can inflate performance for dissimilarity-based modules. The release should be interpreted as R0 infrastructure, reproducibility, stratified sampling, module-correlation, and baseline-stability evidence.
+
+---
+
+## Related Research Releases — R1-D and R2.1
+
+Two further research milestones have been published since the R0 audit above, in the companion research repository [`Project_Manifold_056`](https://github.com/Leesintheblindmonk1999/Project_Manifold_056). They are documented here as **research findings that inform the SAS roadmap**, not as claims about what is currently deployed in the live production API — see the note below each summary.
+
+### R1-D — Structural Evaluation over Declarative Corpus (halueval_qa)
+
+```text
+Flow + CRE + Negation composite: test F1 = 0.8571, precision = 0.9513,
+recall = 0.7798, accuracy = 0.8699 — a +22.4% improvement over the
+R0.5D lexical baseline (AUC 0.749).
+```
+
+Zenodo record: https://doi.org/10.5281/zenodo.21282332
+
+### R2.1 — Structural Code Hallucination Detection via AST Fingerprinting
+
+First extension of the κD structural-evaluation line into the code domain. AST structural comparison against a reference implementation (binary vetoes removed) reached AUC 0.9141 (raw) / 0.9421 (length-confound-controlled) on a 1,596-row execution-verified corpus. An internal-coherence TDA adaptation was tested and produced a documented negative result (AUC 0.40–0.45), confirmed by two independent implementations.
+
+Zenodo record: https://doi.org/10.5281/zenodo.21365707
+
+> **Production status note:** the `Flow + CRE + Negation` composite (R1-D) and the vetoless AST structural comparison (R2.1, `code_diff_isi`) are research results validated against offline corpora. Whether and how they have been integrated into the live modules behind `/v1/diff`, `/v1/audit`, and `/v1/batch` should be confirmed against the current `core/` implementation and changelog before being cited as a description of live production behavior. The R0 → R1 transition plan below tracks this integration work explicitly.
 
 ---
 
@@ -450,6 +476,8 @@ The next research phase is to connect the production SAS detector and planned R1
 | `e10_grounding_score` | Unsupported claim / source-grounding signal | R1 multimetric tribunal |
 | `e11_temporal_score` | Temporal inconsistency signal | R1 multimetric tribunal |
 | `e12_topic_shift_score` | Abrupt topic-shift signal | R1 multimetric tribunal |
+| `flow_cre_negation_composite` | Structural composite validated in R1-D (test F1=0.8571 on declarative QA) | Candidate for R1 multimetric tribunal; production-integration status to be confirmed against `core/` |
+| `code_diff_isi` (vetoless) | AST structural comparison validated in R2.1 (AUC 0.9141-0.9421, reference required) | Candidate for a code-domain audit endpoint; requires a reference implementation at call time, not a drop-in replacement for `/v1/diff` on arbitrary text |
 | `kappa_equivalence_scan` | κD semantic-equivalence and threshold-shield scanner | API-SHIELD / integrity layer |
 | `module_observability` | `debug_modules=true`, per-module trace outputs | API-OBS |
 | `evidence_bundle` | Hashes, module outputs, request metadata, reproducibility bundle | API-CERT |
@@ -971,7 +999,7 @@ Recommended new documentation:
 | Repository | Role |
 |---|---|
 | [`SAS`](https://github.com/Leesintheblindmonk1999/SAS) | Main API, core engine, benchmark, docs, self-hosting |
-| [`Project_Manifold_056`](https://github.com/Leesintheblindmonk1999/Project_Manifold_056) | Historical κD prior-art snapshot and R0 baseline audit artifact |
+| [`Project_Manifold_056`](https://github.com/Leesintheblindmonk1999/Project_Manifold_056) | Historical κD prior-art snapshot; R0/R0-bis/R0.5 external-clean tracks; R1/R1-D structural evaluations; R2.1 code-domain extension |
 | [`sas-landing`](https://github.com/Leesintheblindmonk1999/sas-landing) | Public legitimacy layer: benchmark, API status, demo, activity feed |
 | [`sas-client`](https://github.com/Leesintheblindmonk1999/sas-client) | Official Python client and CLI |
 | [`sas-js`](https://github.com/Leesintheblindmonk1999/sas-js) | Official Node.js / TypeScript SDK, published on npm as [`sas-audit-client`](https://www.npmjs.com/package/sas-audit-client) |
@@ -1016,6 +1044,21 @@ Zenodo. https://zenodo.org/records/20647532
   url          = {https://zenodo.org/records/20647532},
   note         = {R0 infrastructure and baseline-stability audit under clean-self control}
 }
+```
+
+R1-D structural evaluation over declarative corpus R0.5D:
+
+```text
+Durante, G. E. (2026). SAS / κD=0.56 — R1-D: Structural Evaluation over Declarative
+Corpus R0.5D (halueval_qa). Zenodo. https://doi.org/10.5281/zenodo.21282332
+```
+
+R2.1 structural code hallucination detection:
+
+```text
+Durante, G. E. (2026). SAS / κD=0.56 — R2.1: Structural Code Hallucination Detection
+via AST Fingerprinting, Validated on a Functional Corpus. Zenodo.
+https://doi.org/10.5281/zenodo.21365707
 ```
 
 ---
