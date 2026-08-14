@@ -30,7 +30,7 @@ It provides an API and research framework for auditing:
 - operational traceability without storing raw submitted content;
 - reproducible R0/R1 research workflows for module-correlation, baseline stability, and future multimetric tribunal evaluation.
 
-The core structural signal is the **Invariant Similarity Index (ISI)** compared against **κD = 0.56** — the Durante Constant.
+The core structural signal is the **Invariant Similarity Index (ISI)** compared against **κD = 0.56** 
 
 ```text
 ISI >= 0.56  →  structurally coherent
