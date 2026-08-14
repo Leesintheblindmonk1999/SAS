@@ -780,6 +780,8 @@ Hosted API plans:
 | **SAS On-Premise License** | Private deployment · commercial license | **From USD 15,000/year** |
 | **Technical Pilot** | Guided integration · technical report | **USD 1,500–3,000 one-time** |
 
+> Enterprise and On-Premise SLA-backed commitments require completion of the R0→R1 multimetric tribunal transition.
+
 Payment automation:
 
 - Free key: `POST /public/request-key` → email delivery.
