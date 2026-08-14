@@ -101,9 +101,9 @@ Two further research milestones have been published since the R0 audit above, in
 ### R1-D — Structural Evaluation over Declarative Corpus (halueval_qa)
 
 ```text
-Flow + CRE + Negation composite: test F1 = 0.8571, precision = 0.9513,
-recall = 0.7798, accuracy = 0.8699 — a +22.4% improvement over the
-R0.5D lexical baseline (AUC 0.749).
+Flow + CRE + Negation composite: test F1 = 0.5230, precision = 0.5617,
+recall = 0.4892, accuracy = 0.5538 — above chance, below the R0.5D
+lexical baseline (AUC 0.749).
 ```
 
 Zenodo record: https://doi.org/10.5281/zenodo.21282332
